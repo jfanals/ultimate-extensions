@@ -10,7 +10,7 @@ changes Ultimate itself. One exception: prompt-cache loads Pi's internal `cache-
 | [awake](awake/)               | Keeps the Mac from sleeping on AC power while agents work; macOS only.                             |
 | [tab-status](tab-status/)     | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
 | [projects](projects/)         | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
-| [prompt-cache](prompt-cache/) | Marks replies that rebuilt the prompt cache, with their cost, and keep-warm pings.                 |
+| [prompt-cache](prompt-cache/) | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
 | [speech](speech/)             | Local Parakeet speech to text and Kokoro text to speech, started on demand; Apple Silicon.         |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
 

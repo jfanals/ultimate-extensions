@@ -11,7 +11,6 @@ import type { Miss, Warm } from './notice.ts'
 export type Entry = {
   id: number
   kind: string
-  input?: true
   model?: readonly { role: string; timestamp: number; usage?: unknown }[]
 }
 
@@ -36,13 +35,9 @@ export async function loadCollect(root: string): Promise<Collect> {
   ).collectCacheMisses
 }
 
-/** Rows between an input and the reply it started that are not a row of their own. */
-const quiet = new Set(['pi.system', 'conversations.title-changed'])
-
 /**
- * Every miss Pi counts in `entries` (oldest first), with the row its notice goes after: the input that started the
- * paying reply, else the reply itself. `warms` are the conversation's keep-warm pings; a ping renews the cache, so the
- * idle time runs from it.
+ * Every miss Pi counts in `entries` (oldest first). `warms` are the conversation's keep-warm pings; a ping renews the
+ * cache, so the idle time runs from it.
  */
 export function missesOf(
   entries: readonly Entry[],
@@ -51,18 +46,17 @@ export function missesOf(
   models: Parameters<Collect>[1],
 ): Miss[] {
   const session: object[] = []
-  const replies = new Map<object, { entry: Entry; index: number }>()
   const pings = warms.filter((warm) => warm.error === undefined).toSorted((a, b) => a.at - b.at)
   let next = 0
   let compacted = false
-  entries.forEach((entry, index) => {
+  for (const entry of entries) {
     if (entry.kind === 'pi.compaction' || entry.kind === 'pi.reset') {
       session.push({ type: 'compaction' })
       compacted = true
-      return
+      continue
     }
     const message = entry.model?.[0]
-    if (entry.kind !== 'pi.assistant' || message?.role !== 'assistant') return
+    if (entry.kind !== 'pi.assistant' || message?.role !== 'assistant') continue
     // Entries carry no time, so pings since the last reply may predate the new context: dropping them can only hide a
     // miss after it, never invent one from the old context's size.
     if (compacted) while (next < pings.length && pings[next].at < message.timestamp) next++
@@ -83,22 +77,11 @@ export function missesOf(
       })
     }
     session.push({ type: 'message', message })
-    replies.set(message, { entry, index })
-  })
-  const found = collect(session, models)
-  return [...found].map(([message, miss]) => {
-    const { entry, index } = replies.get(message)!
-    let before = index - 1
-    while (before >= 0 && quiet.has(entries[before].kind)) before--
-    const input = before >= 0 && entries[before].input ? entries[before] : undefined
-    return {
-      reply: entry.id,
-      anchor: input?.id ?? entry.id,
-      at: (message as { timestamp: number }).timestamp,
-      missedTokens: miss.missedTokens,
-      missedCost: miss.missedCost,
-      idleMs: miss.idleMs,
-      modelChanged: miss.modelChanged,
-    }
-  })
+  }
+  return [...collect(session, models)].map(([message, miss]) => ({
+    at: (message as { timestamp: number }).timestamp,
+    missedTokens: miss.missedTokens,
+    missedCost: miss.missedCost,
+    idleMs: miss.idleMs,
+  }))
 }

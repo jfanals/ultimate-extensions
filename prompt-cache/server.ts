@@ -1,6 +1,6 @@
 /**
- * Cache: when a conversation's prompt cache was rebuilt (Pi's `collectCacheMisses` over its replies) and when keep-warm
- * renewed @ultimate's. keep-warm keeps only its last ping, so a timer copies each finished ping into `cache.warms`.
+ * Cache: what rebuilding conversations' prompt caches cost (Pi's `collectCacheMisses` over their replies) and when
+ * keep-warm renewed @ultimate's. keep-warm keeps only its last ping, so a timer copies each finished ping into `cache.warms`.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -18,7 +18,7 @@ import type {
 import { loadCollect, missesOf } from './misses.ts'
 import type { Collect, Entry } from './misses.ts'
 import { shown } from './notice.ts'
-import type { Miss, Settings, Warm } from './notice.ts'
+import type { Miss, Warm } from './notice.ts'
 
 /** The parts of `ExtensionHost` (`server/extensions.ts`) this facet uses. */
 type Host = {
@@ -65,17 +65,13 @@ const PROVIDER = 'claude-code'
 const TICK = 60_000
 const WEEK = 7 * 24 * 60 * 60_000
 
-/** `cache.showMisses` and `cache.showWarms` in `~/.ultimate/settings.json`, read at each call; both default true. */
-export async function settingsOf(userHome: string): Promise<Settings> {
+/** `cache.showWarms` in `~/.ultimate/settings.json`, read at each call; defaults to true. */
+export async function showWarms(userHome: string) {
   // A missing or invalid settings file (reported where settings load) counts as unset here.
   const value: unknown = await readFile(join(userHome, '.ultimate/settings.json'), 'utf8')
     .then(JSON.parse)
     .catch(() => ({}))
-  const cache = (value as { cache?: { showMisses?: unknown; showWarms?: unknown } } | null)?.cache
-  return {
-    showMisses: cache?.showMisses !== false,
-    showWarms: cache?.showWarms !== false,
-  }
+  return (value as { cache?: { showWarms?: unknown } } | null)?.cache?.showWarms !== false
 }
 
 /** What a ping cost, from the model's prices: keep-warm keeps only its cache read and one-hour write. */
@@ -196,20 +192,13 @@ const state = (host: Host) =>
   }))
 
 export const actions = {
-  /** `{ conversation }` → its shown misses, the keep-warm pings on it and the settings. */
-  notes: async (args: unknown, { host }: Ctx) => {
+  /** `{ conversation }` → the keep-warm pings on it, none when `cache.showWarms` is false. */
+  warms: async (args: unknown, { host }: Ctx) => {
     const id = (args as { conversation?: unknown } | null)?.conversation
     if (!Number.isSafeInteger(id) || (id as number) < 1)
       throw new Error('Expected { conversation }')
-    const { memo, collect } = state(host)
-    const [settings, warms] = await Promise.all([settingsOf(host.userHome), warmsOf(host)])
-    return {
-      settings,
-      misses: settings.showMisses
-        ? await missesIn(host, memo, await collect, id as number, warms)
-        : [],
-      warms: settings.showWarms ? warms.filter((warm) => warm.conversation === id) : [],
-    }
+    if (!(await showWarms(host.userHome))) return []
+    return (await warmsOf(host)).filter((warm) => warm.conversation === id)
   },
   /** No arguments → the newest miss across conversations, this week's misses and warms. */
   summary: async (_args: unknown, { host }: Ctx) => {

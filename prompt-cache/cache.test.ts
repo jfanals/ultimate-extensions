@@ -1,13 +1,13 @@
 /**
- * The cache notices' core paths, outside the clone's suites:
+ * The cache counts' and warm lines' core paths, outside the clone's suites:
  * `ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts`.
- * Pi's own `collectCacheMisses` counts; these check the wiring to it, its threshold and the lines.
+ * Pi's own `collectCacheMisses` counts; these check the wiring to it, its threshold and the warm lines.
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadCollect, missesOf } from './misses.ts'
 import type { Entry } from './misses.ts'
-import { missText, shown, warmAnchor, warmText } from './notice.ts'
+import { shown, warmAnchor, warmText } from './notice.ts'
 import type { Warm } from './notice.ts'
 
 // Pi's code comes from the Ultimate clone's node_modules, as it does when the extension runs.
@@ -46,9 +46,9 @@ function reply(id: number, at: number, read: number, write: number): Entry {
     ],
   }
 }
-const input = (id: number): Entry => ({ id, kind: 'pi.user', input: true })
+const input = (id: number): Entry => ({ id, kind: 'pi.user' })
 
-test('a rebuild after an idle gap is counted on the reply, its notice after the input that started it', () => {
+test('a rebuild after an idle gap is counted with its tokens and cost', () => {
   const entries = [
     input(1),
     reply(2, 0, 0, 170_000),
@@ -58,15 +58,11 @@ test('a rebuild after an idle gap is counted on the reply, its notice after the 
   ]
   const [miss, ...rest] = missesOf(entries, [], collect, models)
   assert.equal(rest.length, 0)
-  assert.equal(miss.reply, 5)
-  assert.equal(miss.anchor, 3)
+  assert.equal(miss.at, 5 * HOUR)
   assert.equal(miss.missedTokens, 170_002)
   assert.equal(miss.idleMs, 5 * HOUR)
+  assert.ok(miss.missedCost > 1)
   assert.ok(shown(miss))
-  assert.equal(
-    missText(miss),
-    `Cache rebuilt after 5h 00m idle · 170k tokens · $${miss.missedCost.toFixed(2)}`,
-  )
 })
 
 test('a keep-warm ping renews the cache: idle time runs from it, a miss it prevented is not counted', () => {
