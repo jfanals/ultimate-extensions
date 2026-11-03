@@ -31,8 +31,9 @@ export type Collect = (
 /** Pi's `collectCacheMisses`, from the Ultimate clone at `root`. */
 export async function loadCollect(root: string): Promise<Collect> {
   const path = join(root, 'node_modules/@earendil-works/pi-coding-agent/dist/core/cache-stats.js')
-  return ((await import(pathToFileURL(path).href)) as { collectCacheMisses: Collect })
-    .collectCacheMisses
+  return (
+    (await import(/* @vite-ignore */ pathToFileURL(path).href)) as { collectCacheMisses: Collect }
+  ).collectCacheMisses
 }
 
 /** Rows between an input and the reply it started that are not a row of their own. */
