@@ -20,6 +20,8 @@ import {
   useSystem,
   useUltimate,
 } from '@/sdk'
+import { tile } from '../project-icon/icon.ts'
+import { useOverrides } from '../project-icon/use-overrides.ts'
 import { looks } from '../tab-status/status.ts'
 import { arrival, projectUrl, questionLine, totals } from './model.ts'
 import type { Overview, Row, RowState, Waiting } from './model.ts'
@@ -266,6 +268,7 @@ function ProjectRow({
   pending: boolean
 }) {
   const home = useSystem()?.machine.home
+  const override = useOverrides()[row.name]
   const navigate = useNavigate()
   const running = row.port !== undefined
   const action = running ? (
@@ -293,7 +296,7 @@ function ProjectRow({
   return (
     <li
       className={cn(
-        'grid grid-cols-[auto_1fr_auto] items-center gap-x-3 px-3 py-2 md:grid-cols-[auto_10rem_1fr_12rem_4.5rem]',
+        'grid grid-cols-[auto_1fr_auto] items-center gap-x-3 px-3 py-2 md:grid-cols-[auto_13rem_1fr_12rem_4.5rem]',
         row.current && 'bg-accent/40',
       )}
       data-project={row.name}
@@ -303,10 +306,13 @@ function ProjectRow({
       <span className="flex w-2 justify-center">
         <Dot state={row.state} />
       </span>
-      <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-        {row.name}
+      <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-foreground">
+        <img alt="" className="size-[18px] shrink-0" src={tile(row.name, { override })} />
+        <span className="truncate">{row.name}</span>
         {row.current && (
-          <span className="ml-2 font-mono text-[11px] text-muted-foreground">this window</span>
+          <span className="shrink-0 font-mono text-[11px] whitespace-nowrap text-muted-foreground">
+            this window
+          </span>
         )}
       </span>
       <span className="col-start-2 row-start-2 min-w-0 truncate font-mono text-[11px] text-muted-foreground/70 md:col-start-auto md:row-start-auto">

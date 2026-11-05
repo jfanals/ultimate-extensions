@@ -75,14 +75,3 @@ export function prefixed(title: string, status: TabStatus) {
 export function offerBadge(permission: string | undefined, badging: boolean) {
   return badging && permission === 'default'
 }
-
-/** `web/public/favicon.svg` with a dot in the top-right corner, as a data URL. */
-export function favicon(dot: string) {
-  const svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    '<rect width="32" height="32" rx="7" fill="#17171c"/>' +
-    '<path d="M9 8v10a7 7 0 0 0 14 0V8" fill="none" stroke="#b79cf0" stroke-width="3.2" stroke-linecap="round"/>' +
-    `<circle cx="23" cy="9" r="8.5" fill="${dot}" stroke="#17171c" stroke-width="2.5"/>` +
-    '</svg>'
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
-}

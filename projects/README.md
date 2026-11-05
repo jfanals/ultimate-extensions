@@ -7,6 +7,8 @@ of them.
 
 - **tab-status**, from this repository: projects imports its `status.ts` (`../tab-status/status.ts`), so the
   tab-status folder must sit next to it, as it does in the clone. Install both.
+- **project-icon**, from this repository: each row shows its project's tile (`../project-icon/`), with the
+  `projectIcon` overrides applied.
 - Optional: Ultimate's built-in tailscale extension, for links that open over the tailnet.
 
 ## Using it
@@ -14,7 +16,7 @@ of them.
 - **The counter** in the status line, `◆ 3 waiting in 2 projects`, counts the messages waiting on your answer in every
   project; amber while any waits, a quiet grey `◆ 0` when none does. On a phone it stays on the line as `◆ 3 waiting`.
   Click it to open Projects.
-- **Projects** (a surface, `mod+1…9` or ⌘K **Open Projects**) lists each project with its folder and status, the
+- **Projects** (a surface, `mod+1…9` or ⌘K **Open Projects**) lists each project with its tile, folder and status, the
   current one first and marked **this window**:
 
   | Dot             | Status                                                        |
@@ -45,6 +47,7 @@ None.
 ```sh
 git clone https://github.com/jfanals/ultimate-extensions ~/ultimate-extensions   # once
 ln -s ~/ultimate-extensions/tab-status ~/.ultimate/extensions/tab-status          # install (needed by projects)
+ln -s ~/ultimate-extensions/project-icon ~/.ultimate/extensions/project-icon      # install (needed by projects)
 ln -s ~/ultimate-extensions/projects ~/.ultimate/extensions/projects              # install
 git -C ~/ultimate-extensions pull                                                 # update
 rm ~/.ultimate/extensions/projects                                                # uninstall
@@ -68,7 +71,7 @@ The target of **Open** shows its conversation even when it was last left on Proj
 "new answer" uses the `ext.conversations.seen` the user's last browser left in that project, so it can lag behind the
 browser tab's own dot.
 
-It imports only packages, `@/sdk` and tab-status's `status.ts`; other extensions are named by string (the `messages`
+It imports only packages, `@/sdk`, tab-status's `status.ts` and project-icon's tile; other extensions are named by string (the `messages`
 service, the `ultimate.conversation-overview` document, `ext.conversations.*` UI state). If an Ultimate update renames
 one, `here` fails and rows show `not answering`.
 

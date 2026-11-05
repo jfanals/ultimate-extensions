@@ -5,7 +5,9 @@ at a glance.
 
 ## Requirements
 
-None beyond Ultimate. The Dock badge needs an installed app window (a PWA) in a Chromium browser.
+- **project-icon**, from this repository: the favicon is its project tile, imported from `../project-icon/`, so the
+  folders must sit side by side as in the clone. Link it too, for its `projectIcon` setting.
+- The Dock badge needs an installed app window (a PWA) in a Chromium browser.
 
 ## What it shows
 
@@ -18,6 +20,9 @@ One status per project, highest first:
 | working    | any agent in the project runs                                     | violet      | 🟣    |
 | new answer | a conversation answered since you last looked at it               | green       | 🟢    |
 | idle       | none of these                                                     | none        | none  |
+
+The favicon is the project's tile from [project-icon](../project-icon/) (two initials on a colour from the project's
+name), with the status's dot in its top-right corner.
 
 The Dock badge of an installed app window counts the messages waiting on you (`navigator.setAppBadge`), and clears
 when none does.
@@ -52,7 +57,8 @@ the To-dos panel do: the root's `board` (open messages to the user), `ultimate.c
 conversation list, and the sidebar's `ext.conversations.seen` and `ext.conversations.concluded` UI state.
 `AllowBadge` in `statusline.right` asks for notification permission on its click (`offerBadge` decides when it
 shows); the badge is set again as soon as permission changes. `status.ts` holds the priority (`tabStatus`), the title
-prefix and the favicon (Ultimate's `web/public/favicon.svg` with a dot).
+prefix and each status's dot colour; the favicon is project-icon's `tile`, for the folder name of the project
+(`system.project.root`), with that dot.
 
 The core sets the title itself (`● name` while the shown conversation is busy); a `MutationObserver` on `<head>`
 replaces that prefix with the status's after each change.

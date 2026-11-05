@@ -9,6 +9,7 @@ imports it from the clone (its README says which files it follows).
 | Extension                     | What it does                                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------------------------------- |
 | [awake](awake/)               | Keeps the Mac from sleeping on AC power while agents work; macOS only.                             |
+| [project-icon](project-icon/) | Each project's tile: two initials on a colour from its name, for the favicon and Projects rows.    |
 | [tab-status](tab-status/)     | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
 | [projects](projects/)         | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
 | [prompt-cache](prompt-cache/) | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
@@ -38,8 +39,10 @@ No restart: Ultimate reloads an extension when its files change.
 
 ## Dependencies
 
-- **projects** needs **tab-status**: it imports `../tab-status/status.ts`, so the folders must stay side by side as in
-  the clone. Install both.
+- **tab-status** needs **project-icon**: it imports `../project-icon/icon.ts` for the favicon, so the folders must
+  stay side by side as in the clone. Link project-icon too, or its `projectIcon` setting is not read.
+- **projects** needs **tab-status** and **project-icon**: it imports `../tab-status/status.ts` and the project-icon
+  tile. Install all three.
 - **drive** needs **speech** (Kokoro for its voice, Parakeet for its talk button) and **voice** for local speech to
   text; with Ultimate's built-in voice instead it transcribes through OpenAI only.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
@@ -54,7 +57,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test awake/awake.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts
+node --test awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 

@@ -6,9 +6,12 @@ import {
   useConversation,
   useConversations,
   useDocOf,
+  useSystem,
   useUiState,
 } from '@/sdk'
-import { favicon, looks, offerBadge, prefixed, tabStatus } from './status.ts'
+import { projectName, tile } from '../project-icon/icon.ts'
+import { useOverrides } from '../project-icon/use-overrides.ts'
+import { looks, offerBadge, prefixed, tabStatus } from './status.ts'
 import type { TabStatus } from './status.ts'
 
 /** The messages extension's `board` document: only the fields that tell an open question for the user. */
@@ -99,13 +102,17 @@ function AllowBadge() {
   )
 }
 
+/** The project's tile (project-icon), with the status's dot in its corner. */
 function useFavicon(status: TabStatus) {
+  const root = useSystem()?.project.root
+  const overrides = useOverrides()
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
-    if (!link) return
+    if (!link || !root) return
+    const name = projectName(root)
     const dot = looks[status].dot
-    link.href = dot ? favicon(dot) : PLAIN
-  }, [status])
+    link.href = tile(name, { override: overrides[name], ...(dot ? { dot } : {}) })
+  }, [status, root, overrides])
   useEffect(
     () => () => {
       document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', PLAIN)
