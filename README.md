@@ -2,8 +2,9 @@
 
 Personal extensions for [Ultimate](https://github.com/HazAT/ultimate), each one installable on its own. They are user
 extensions built on Ultimate's public extension API (facets, documents, actions, services and the `@/sdk`); none
-changes Ultimate itself. One exception: prompt-cache loads Pi's internal `cache-stats.js` from the Ultimate clone's
-`node_modules`, so a Pi upgrade in Ultimate can break it.
+changes Ultimate itself. Two exceptions: prompt-cache loads Pi's internal `cache-stats.js` from the Ultimate clone's
+`node_modules`, so a Pi upgrade in Ultimate can break it; voice replaces Ultimate's built-in voice by name and
+imports it from the clone (its README says which files it follows).
 
 | Extension                     | What it does                                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -12,6 +13,7 @@ changes Ultimate itself. One exception: prompt-cache loads Pi's internal `cache-
 | [projects](projects/)         | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
 | [prompt-cache](prompt-cache/) | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
 | [speech](speech/)             | Local Parakeet speech to text and Kokoro text to speech, started on demand; Apple Silicon.         |
+| [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
 
 ## Install
@@ -38,9 +40,9 @@ No restart: Ultimate reloads an extension when its files change.
 
 - **projects** needs **tab-status**: it imports `../tab-status/status.ts`, so the folders must stay side by side as in
   the clone. Install both.
-- **drive** needs **speech** (Kokoro for its voice, Parakeet for its talk button) **and a patched Ultimate with a
-  `voice.transcriptionUrl` setting** for local speech to text. Upstream Ultimate does not have that setting; without
-  it drive transcribes through OpenAI only.
+- **drive** needs **speech** (Kokoro for its voice, Parakeet for its talk button) and **voice** for local speech to
+  text; with Ultimate's built-in voice instead it transcribes through OpenAI only.
+- **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.
 - **awake** works on macOS only.
 
@@ -52,7 +54,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test awake/awake.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts drive/drive.test.ts
+node --test awake/awake.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 

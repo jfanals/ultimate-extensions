@@ -8,10 +8,9 @@ into speech for the [drive](../drive/) extension.
 - **Apple Silicon Mac** (Parakeet runs on MLX).
 - **Python 3.12** with `parakeet-mlx`, `kokoro` and `soundfile` (Kokoro does not support 3.13 yet).
 - **ffmpeg** on Ultimate's `PATH`, to decode browser recordings.
-- **Speech to text in Ultimate's composer needs a patched Ultimate.** Upstream Ultimate's voice extension transcribes
-  with OpenAI only; this extension's transcription endpoint is used only by an Ultimate whose voice extension reads a
-  `voice.transcriptionUrl` setting. Upstream has no such setting. Without the patch, speech still serves text to
-  speech to other extensions (the `speech` service).
+- **Speech to text in Ultimate's composer needs [voice](../voice/)** from this repository: Ultimate's built-in voice
+  transcribes with OpenAI only, while this one reads the `voice.transcriptionUrl` setting that points it here. Without
+  it, speech still serves text to speech to other extensions (the `speech` service).
 
 Set it up once, in a virtual environment of its own:
 
@@ -43,7 +42,7 @@ In `~/.ultimate/settings.json`:
   each request; a change starts new workers.
 - `speech.idleMinutes`: how long a worker stays warm after its last answer; default 15. Read at each request.
 - `speech.port`: the local transcription port; default 8179. Read when the extension loads.
-- `voice.transcriptionUrl` (patched Ultimate only): this port for Parakeet, or any other OpenAI-compatible
+- `voice.transcriptionUrl` (read by [voice](../voice/)): this port for Parakeet, or any other OpenAI-compatible
   transcription server instead.
 
 ## Install, update, uninstall

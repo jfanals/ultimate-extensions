@@ -5,10 +5,9 @@ A hands-light screen for talking to @ultimate from a phone, which answers aloud 
 ## Requirements
 
 - **speech**, from this repository, set up with Kokoro and Parakeet (see its README).
-- **A patched Ultimate with `voice.transcriptionUrl`.** Drive turns speech into text through the built-in voice
-  extension's `transcribe` action, pointed at speech's local Parakeet by the `voice.transcriptionUrl` setting. Upstream
-  Ultimate has no such setting, so on an unpatched Ultimate the talk button transcribes only through OpenAI (with an
-  OpenAI API key in Secrets), never locally.
+- **voice**, from this repository, for local speech to text. Drive turns speech into text through voice's
+  `transcribe` action, pointed at speech's local Parakeet by the `voice.transcriptionUrl` setting. With Ultimate's
+  built-in voice instead, the talk button transcribes only through OpenAI (with an OpenAI API key in Secrets).
 - HTTPS for the phone's microphone: open Ultimate over the built-in tailscale extension's tailnet URL.
 
 ## Using it
