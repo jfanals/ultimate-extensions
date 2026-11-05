@@ -32,16 +32,19 @@ export async function localTranscribe(
   form.set('file', new Blob([bytes], { type: mimeType }), `recording.${extension}`)
   form.set('model', 'gpt-4o-mini-transcribe')
   form.set('response_format', 'json')
-  const response = await fetch(url, { method: 'POST', body: form, signal }).catch(
-    (error: unknown) => {
-      if (error instanceof Error && error.name === 'TimeoutError')
-        throw new Error('Transcription timed out: try a shorter recording')
-      throw new Error(`Transcription server ${url} is not reachable: is it running?`)
-    },
-  )
+  let response: Response
+  let body: string
+  try {
+    response = await fetch(url, { method: 'POST', body: form, signal })
+    body = await response.text()
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError')
+      throw new Error(`Transcription by ${url} timed out: try a shorter recording`)
+    throw new Error(`Transcription server ${url} is not reachable: is it running?`)
+  }
   let answer: { text?: unknown; error?: { message?: unknown } } | undefined
   try {
-    answer = JSON.parse(await response.text())
+    answer = JSON.parse(body)
   } catch {
     // Not JSON: the server answered with an error page.
     answer = undefined

@@ -43,6 +43,8 @@ test('posts the recording to the local server without a key and names it when it
     } as RequestInit).formData()
     const file = form.get('file') as File
     seen.push({ authorization: request.headers.authorization, file: file.name })
+    // 0: never answers, so the caller's deadline passes.
+    if (status === 0) return
     response.writeHead(status, { 'content-type': 'application/json' })
     response.end(JSON.stringify(status === 200 ? { text: ' Hello local.\n' } : { error: { message: 'boom' } }))
   })
@@ -59,7 +61,12 @@ test('posts the recording to the local server without a key and names it when it
     await assert.rejects(localTranscribe(url, audio, 4, never), {
       message: 'The recording is too large to transcribe',
     })
+    status = 0
+    await assert.rejects(localTranscribe(url, audio, 1024, AbortSignal.timeout(50)), {
+      message: `Transcription by ${url} timed out: try a shorter recording`,
+    })
   } finally {
+    server.closeAllConnections()
     await new Promise((resolve) => server.close(resolve))
   }
   await assert.rejects(localTranscribe(url, audio, 1024, never), {
