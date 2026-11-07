@@ -1,5 +1,5 @@
 import { defineExtension, section } from '@earendil-works/pi-durable'
-import { readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
+import { readCaptions, readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
 
 /** The parts of `ExtensionHost` (`server/extensions.ts`) this facet uses. */
 type Host = { projects(): Promise<{ root?: string; home: string }[]> }
@@ -17,7 +17,7 @@ export default defineExtension({
 })
 
 // Only the transcript's player reads files; an agent has its own tools for that.
-export const userActions = ['info', 'read', 'deck']
+export const userActions = ['info', 'read', 'deck', 'captions']
 export const actions = {
   /** `{ path }` → `{ type, size }` of a media file in a project folder, or why it cannot be played. */
   info: async (args: unknown, { host }: Ctx) => {
@@ -31,6 +31,12 @@ export const actions = {
     const { path } = (args && typeof args === 'object' ? args : {}) as { path?: unknown }
     if (typeof path !== 'string') throw new Error('Expected { path }')
     return readDeck(path, await rootsOf(await host.projects()))
+  },
+  /** `{ path }` → the WebVTT subtitles beside a video in a project folder (`.vtt` or `.srt`), or null. */
+  captions: async (args: unknown, { host }: Ctx) => {
+    const { path } = (args && typeof args === 'object' ? args : {}) as { path?: unknown }
+    if (typeof path !== 'string') throw new Error('Expected { path }')
+    return readCaptions(path, await rootsOf(await host.projects()))
   },
   /** `{ path, offset }` → `{ type, size, data }`: up to 4 MB of a media file in a project folder, as base64. */
   read: async (args: unknown, { host }: Ctx) => {

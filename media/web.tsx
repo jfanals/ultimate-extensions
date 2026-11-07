@@ -1,16 +1,20 @@
 import { FileAudioIcon, FileVideoIcon, LoaderCircleIcon, PlayIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import { api, cn, defineWebExtension, errorMessage, formatBytes } from '@/sdk'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { actionRef, api, cn, defineWebExtension, errorMessage, formatBytes } from '@/sdk'
 import { DeckCard } from './deck.tsx'
+import { toggleFullscreen, useCaptions, usePlayerKeys } from './keys.ts'
 import { InfoAction, load, MAX_BYTES } from './load.ts'
 import { isDeck, mediaType } from './types.ts'
+
+/** `{ path }` → the WebVTT subtitles beside a video (its `.vtt` or `.srt`), or null (server.ts). */
+const CaptionsAction = actionRef<{ path: string }, string | null>('media', 'captions')
 
 type State =
   | { kind: 'checking' }
   | { kind: 'ready'; size: number }
   | { kind: 'loading'; size: number; read: number }
-  | { kind: 'playing'; size: number; url: string }
+  | { kind: 'playing'; size: number; url: string; captions?: string }
   | { kind: 'failed'; reason: string }
 
 /** A link to an audio or video file on this machine, as a card that plays it in place. */
@@ -39,25 +43,64 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
   }, [path])
   useEffect(() => () => loader.abort(), [loader])
   const url = state.kind === 'playing' ? state.url : undefined
+  const track = state.kind === 'playing' ? state.captions : undefined
   useEffect(
     () => () => {
       if (url) URL.revokeObjectURL(url)
+      if (track) URL.revokeObjectURL(track)
     },
-    [url],
+    [url, track],
   )
+  const player = useRef<HTMLMediaElement>(null)
+  const [captions, setCaptions] = useCaptions()
+  // The video's own caption menu and the C key both turn its subtitles on and off.
+  useEffect(() => {
+    if (!track) return
+    // Safari also lists an MP4's own subtitle track: one track shows at most, so captions never double.
+    const tracks = [...(player.current?.textTracks ?? [])]
+    tracks.forEach((t, i) => (t.mode = captions && i === 0 ? 'showing' : 'disabled'))
+  }, [captions, track])
 
   const play = () => {
     if (state.kind !== 'ready') return
     const { size } = state
     setState({ kind: 'loading', size, read: 0 })
-    load(path, (read) => setState({ kind: 'loading', size, read }), loader.signal).then(
-      (url) => setState({ kind: 'playing', size, url }),
+    Promise.all([
+      load(path, (read) => setState({ kind: 'loading', size, read }), loader.signal),
+      video ? api.action(CaptionsAction, { path }, { signal: loader.signal }) : null,
+    ]).then(
+      ([blob, vtt]) =>
+        setState({
+          kind: 'playing',
+          size,
+          url: blob,
+          captions: vtt ? URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' })) : undefined,
+        }),
       (error: unknown) => {
         // Unmounting aborts the load; there is nothing left to show it on.
         if (!loader.signal.aborted) setState({ kind: 'failed', reason: errorMessage(error) })
       },
     )
   }
+
+  const keys = usePlayerKeys((key) => {
+    if (state.kind === 'ready' && (key === ' ' || key === 'k')) return (play(), true)
+    const element = player.current
+    if (!element) return false
+    const jump = (by: number) =>
+      (element.currentTime = Math.max(0, Math.min(element.duration || 0, element.currentTime + by)))
+    if (key === ' ' || key === 'k') {
+      if (element.paused) void element.play()
+      else element.pause()
+    } else if (key === 'ArrowLeft') jump(-5)
+    else if (key === 'ArrowRight') jump(5)
+    else if (key === 'j') jump(-10)
+    else if (key === 'l') jump(10)
+    else if (key === 'f' && video) toggleFullscreen(element)
+    else if (key === 'c' && track) setCaptions(!captions)
+    else return false
+    return true
+  })
 
   const Icon = video ? FileVideoIcon : FileAudioIcon
   const note =
@@ -72,17 +115,23 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
     <span
       className="my-1 inline-block w-full max-w-md overflow-hidden align-top rounded-md border border-border/80 bg-terminal not-prose"
       data-ui="media-card"
+      ref={keys}
       title={path}
     >
       {state.kind === 'playing' && video && (
-        // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own recordings carry no captions.
+        // oxlint-disable-next-line jsx-a11y/media-has-caption -- a recording has captions only when a .vtt or .srt sits beside it.
         <video
           autoPlay
           className="block aspect-video w-full bg-black"
           controls
           playsInline
+          ref={player as RefObject<HTMLVideoElement>}
           src={state.url}
-        />
+        >
+          {state.captions && (
+            <track default={captions} kind="subtitles" label="Captions" src={state.captions} />
+          )}
+        </video>
       )}
       <span className="flex items-center gap-2.5 px-2.5 py-2">
         {state.kind === 'ready' ? (
@@ -125,7 +174,13 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
       )}
       {state.kind === 'playing' && !video && (
         // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own recordings carry no captions.
-        <audio autoPlay className="block h-10 w-full px-1.5 pb-1.5" controls src={state.url} />
+        <audio
+          autoPlay
+          className="block h-10 w-full px-1.5 pb-1.5"
+          controls
+          ref={player as RefObject<HTMLAudioElement>}
+          src={state.url}
+        />
       )}
     </span>
   )

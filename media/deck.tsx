@@ -1,4 +1,6 @@
 import {
+  CaptionsIcon,
+  CaptionsOffIcon,
   ExpandIcon,
   LoaderCircleIcon,
   PauseIcon,
@@ -10,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { actionRef, api, cn, errorMessage } from '@/sdk'
+import { useCaptions, toggleFullscreen, usePlayerKeys } from './keys.ts'
 import { load } from './load.ts'
 
 /** A narrated deck's manifest with absolute paths (server.ts `deck`, media.ts `Deck`). */
@@ -19,6 +22,8 @@ type Deck = {
   height: number
   duration: number
   audio: string
+  /** Whether the player draws the captions; older decks burned each line into its slide. */
+  captions: boolean
   cues: { scene: number; text: string; image: string; start: number }[]
 }
 const DeckAction = actionRef<{ path: string }, Deck>('media', 'deck')
@@ -53,6 +58,7 @@ export function DeckCard({ path }: { path: string }) {
   const [paused, setPaused] = useState(true)
   const audio = useRef<HTMLAudioElement>(null)
   const stage = useRef<HTMLSpanElement>(null)
+  const [captions, setCaptions] = useCaptions()
 
   useEffect(() => {
     let live = true
@@ -112,6 +118,27 @@ export function DeckCard({ path }: { path: string }) {
       },
     )
   }
+
+  const keys = usePlayerKeys((key) => {
+    if (state.kind === 'ready' && (key === ' ' || key === 'k')) return (start(), true)
+    const element = audio.current
+    if (state.kind !== 'playing' || !element) return false
+    const jump = (by: number) => {
+      element.currentTime = Math.max(0, Math.min(state.deck.duration, element.currentTime + by))
+      setTime(element.currentTime)
+    }
+    if (key === ' ' || key === 'k') {
+      if (element.paused) void element.play()
+      else element.pause()
+    } else if (key === 'ArrowLeft') jump(-5)
+    else if (key === 'ArrowRight') jump(5)
+    else if (key === 'j') jump(-10)
+    else if (key === 'l') jump(10)
+    else if (key === 'f') toggleFullscreen(stage.current)
+    else if (key === 'c' && state.deck.captions) setCaptions(!captions)
+    else return false
+    return true
+  })
 
   // Follow the audio smoothly; `timeupdate` alone fires only about four times a second.
   useEffect(() => {
@@ -187,14 +214,29 @@ export function DeckCard({ path }: { path: string }) {
     <span
       className="group/deck my-1 block w-full max-w-2xl overflow-hidden rounded-md border border-border/80 bg-terminal align-top not-prose"
       data-ui="deck-card"
+      ref={keys}
       title={path}
     >
       <span
         className="relative block w-full overflow-hidden bg-black"
         ref={stage}
-        style={{ aspectRatio: `${deck.width} / ${deck.height}` }}
+        style={{ aspectRatio: `${deck.width} / ${deck.height}`, containerType: 'inline-size' }}
       >
         {image && <img alt={cue.text} className="block size-full object-contain" src={image} />}
+        {playing && deck.captions && captions && cue.text && (
+          // The slide leaves its bottom fifth empty, so the caption covers no content.
+          <span
+            className="pointer-events-none absolute inset-x-0 bottom-[5%] flex justify-center px-[8%]"
+            data-ui="deck-caption"
+          >
+            <span
+              className="rounded-[0.2em] bg-black/75 px-[0.45em] py-[0.12em] text-center leading-[1.35] font-medium text-white [box-decoration-break:clone]"
+              style={{ fontSize: 'clamp(12px, 2.5cqw, 48px)' }}
+            >
+              {cue.text}
+            </span>
+          </span>
+        )}
         {!playing && (
           <button
             aria-label={`Play ${deck.title}`}
@@ -214,7 +256,7 @@ export function DeckCard({ path }: { path: string }) {
         )}
       </span>
       {playing && (
-        // oxlint-disable-next-line jsx-a11y/media-has-caption -- every slide shows its spoken line as a subtitle.
+        // oxlint-disable-next-line jsx-a11y/media-has-caption -- the stage shows each spoken line as a caption.
         <audio
           autoPlay
           className="hidden"
@@ -280,10 +322,23 @@ export function DeckCard({ path }: { path: string }) {
         <span className="shrink-0 px-1.5 text-[11px] tabular-nums text-muted-foreground">
           {scenes.findLastIndex((s) => s.start <= time + 0.01) + 1}/{scenes.length}
         </span>
+        {deck.captions && (
+          <DeckButton
+            disabled={!playing}
+            label={captions ? 'Hide captions (c)' : 'Show captions (c)'}
+            onClick={() => setCaptions(!captions)}
+          >
+            {captions ? (
+              <CaptionsIcon className="size-4" />
+            ) : (
+              <CaptionsOffIcon className="size-4" />
+            )}
+          </DeckButton>
+        )}
         <DeckButton
           disabled={!image}
-          label="Full screen"
-          onClick={() => void stage.current?.requestFullscreen()}
+          label="Full screen (f)"
+          onClick={() => toggleFullscreen(stage.current)}
         >
           <ExpandIcon className="size-4" />
         </DeckButton>

@@ -104,6 +104,28 @@ export async function readChunk(media: Media, offset: number) {
   }
 }
 
+/**
+ * The subtitles beside the video at `path` (`take.vtt` or `take.srt` next to `take.mp4`) as WebVTT, or null when it has
+ * none. Both files must lie inside `roots`.
+ */
+export async function readCaptions(path: string, roots: string[]): Promise<string | null> {
+  const media = await resolveMedia(path, roots)
+  if (!media.type.startsWith('video/')) return null
+  const stem = media.path.slice(0, -extname(media.path).length)
+  for (const ext of ['.vtt', '.srt']) {
+    // A video without this subtitle file simply has none; anything outside the roots is refused the same way.
+    const real = await inRoots(stem + ext, roots).catch(() => undefined)
+    if (!real) continue
+    const info = await stat(real)
+    if (!info.isFile() || info.size > MAX_DECK_BYTES) continue
+    const text = (await readFile(real, 'utf8')).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+    if (ext === '.vtt') return text
+    // SRT differs from WebVTT in its header and the comma before the milliseconds.
+    return `WEBVTT\n\n${text.replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2')}`
+  }
+  return null
+}
+
 /** A narrated deck as the player needs it: the audio track and one cue per spoken line, paths absolute. */
 export type Deck = {
   title: string
@@ -111,6 +133,8 @@ export type Deck = {
   height: number
   duration: number
   audio: string
+  /** Whether the player draws each cue as a caption: decks before it burned the line into every slide. */
+  captions: boolean
   cues: { scene: number; text: string; image: string; start: number }[]
 }
 
@@ -147,6 +171,7 @@ export async function readDeck(path: string, roots: string[]): Promise<Deck> {
     height: number(raw.height),
     duration: number(raw.duration),
     audio: inside(raw.audio),
+    captions: raw.captions === true,
     cues: raw.cues.map((cue: Record<string, unknown>) => ({
       scene: number(cue.scene),
       text: typeof cue.text === 'string' ? cue.text : '',

@@ -7,7 +7,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CHUNK_BYTES, readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
+import { CHUNK_BYTES, readCaptions, readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
 import { mediaType } from './types.ts'
 
 const wav = (bytes: number) => {
@@ -72,11 +72,28 @@ test('reads a deck whose files stay in its folder', async (t) => {
   await deck([{ scene: 0, text: 'Hi.', image: 'frames/a.jpg', start: 0 }])
   const read = await readDeck(join(folder, 'deck.json'), [base])
   assert.equal(read.audio, join(folder, 'narration.m4a'))
+  // A deck without `captions` burned its lines into the slides, so the player adds none.
+  assert.equal(read.captions, false)
   assert.equal(read.cues[0]!.image, join(folder, 'frames', 'a.jpg'))
 
   await deck([{ scene: 0, text: 'Hi.', image: '../../secret.jpg', start: 0 }])
   await assert.rejects(readDeck(join(folder, 'deck.json'), [base]), /Not a deck.json/)
   await assert.rejects(readDeck(join(folder, 'deck.json'), [join(base, 'elsewhere')]), /Outside/)
+})
+
+test('gives a video the subtitles beside it as WebVTT', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'media-')))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const mp4 = Buffer.alloc(64)
+  mp4.write('ftyp', 4, 'latin1')
+  await writeFile(join(base, 'talk.mp4'), mp4)
+  await writeFile(join(base, 'bare.mp4'), mp4)
+  await writeFile(join(base, 'talk.srt'), '1\r\n00:00:00,600 --> 00:00:05,250\r\nHello.\r\n')
+  assert.equal(
+    await readCaptions(join(base, 'talk.mp4'), [base]),
+    'WEBVTT\n\n1\n00:00:00.600 --> 00:00:05.250\nHello.\n',
+  )
+  assert.equal(await readCaptions(join(base, 'bare.mp4'), [base]), null)
 })
 
 test('spots links to media files by path', () => {

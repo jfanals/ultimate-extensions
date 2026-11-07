@@ -4,11 +4,20 @@ Plays audio and video files from this machine inline in the transcript, on the M
 
 An agent links a file by its absolute path, `[take 3](/Users/me/my-app/out/take-3.wav)`; a prompt section tells every
 agent, in every project, to do so. The link becomes a card with the file's name and size and a play button; Play loads
-the file and shows the browser's own audio or video controls, with seeking.
+the file and shows the browser's own audio or video controls, with seeking. A video with a `.vtt` or `.srt` of the same
+name beside it (`take.srt` next to `take.mp4`) plays with those subtitles as a caption track.
 
 A link to a narrated deck's `deck.json` (written by the `narrated-demo` skill's `deck.py`) becomes a slide player:
-the first slide shows at once; Play loads the narration and the slides, and each slide shows with its spoken line,
-with slide skipping, a scrubber and full screen.
+the first slide shows at once; Play loads the narration and the slides, and each spoken line shows as a caption over
+its slide, with a CC button, slide skipping, a scrubber and full screen. Decks built before captions were text (each
+line burned into its slide; their `deck.json` has no `"captions": true`) play as they are, with no caption overlay.
+
+## Keys
+
+YouTube's keys work on one player at a time: the full-screen one, else the one you last played or clicked while at
+least half of it is on screen. Space or K plays and pauses, ← and → seek 5 seconds, J and L 10, F toggles full screen
+(video and decks) and C the captions. Captions on or off is remembered for every player. The keys never fire while you
+type in the composer or another field, and Space scrolls the page as usual when no player qualifies.
 
 ## Requirements
 
@@ -33,7 +42,8 @@ when all of these hold:
   `attachments/` or `worktrees/` under its home;
 - its first bytes look like an audio or video container, or a JPEG or PNG.
 
-The `deck` action reads a `deck.json` under the same folder rule and returns its narration and slide paths only when
+The `captions` action returns the `.vtt` or `.srt` beside a video that passes the same checks, under the same folder
+rule. The `deck` action reads a `deck.json` under the same folder rule and returns its narration and slide paths only when
 they lie inside the deck's own folder.
 
 Anything else answers with the reason the card shows: "Outside your project folders", "Not an audio or video file".
@@ -53,5 +63,6 @@ rm ~/.ultimate/extensions/media                                                 
 node --test media/media.test.ts
 ```
 
-They cover what may be read (project folders only, symlinks resolved, media bytes only) and how links are spotted. The
+They cover what may be read (project folders only, symlinks resolved, media bytes only), subtitles beside a video, and
+how links are spotted. The
 card itself was checked on the running host.
