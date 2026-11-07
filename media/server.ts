@@ -11,7 +11,7 @@ export default defineExtension({
     section(
       'media',
       () =>
-        'To show the user an audio or video file on this machine (wav, mp3, m4a, aac, ogg, opus, flac, mp4, m4v, mov, webm), link it by its absolute path in Markdown, `[take 3](/Users/me/my-app/out/take-3.wav)`, with spaces as %20: the transcript plays it inline, on this Mac and over the tailnet. It must sit in a project folder.',
+        'To show the user an audio or video file, link its absolute path in Markdown: `[take 3](/Users/me/my-app/out/take-3.wav)`, spaces as %20. The transcript plays it inline. Only files inside a project folder play.',
     ),
   ],
 })
