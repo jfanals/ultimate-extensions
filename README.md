@@ -16,6 +16,7 @@ imports it from the clone (its README says which files it follows).
 | [speech](speech/)             | Local Parakeet speech to text and Kokoro text to speech, started on demand; Apple Silicon.         |
 | [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
+| [media](media/)               | Audio and video files that agents link play inline, on the Mac and over the tailnet.               |
 
 ## Install
 
@@ -57,7 +58,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts
+node --test awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
