@@ -7,7 +7,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CHUNK_BYTES, readChunk, resolveMedia, rootsOf } from './media.ts'
+import { CHUNK_BYTES, readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
 import { mediaType } from './types.ts'
 
 const wav = (bytes: number) => {
@@ -50,6 +50,33 @@ test('serves media in project folders and nothing else', async (t) => {
   await refused(join(project, 'out', '..', '..', 'outside.wav'), /Outside your project folders/)
   await refused('out/take.wav', /Not an absolute path/)
   await assert.rejects(readChunk(media, -1), /Invalid offset/)
+})
+
+test('reads a deck whose files stay in its folder', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'media-')))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const folder = join(base, 'talk.deck')
+  await mkdir(folder)
+  const deck = (cues: unknown[]) =>
+    writeFile(
+      join(folder, 'deck.json'),
+      JSON.stringify({
+        title: 'Talk',
+        width: 1920,
+        height: 1080,
+        duration: 3,
+        audio: 'narration.m4a',
+        cues,
+      }),
+    )
+  await deck([{ scene: 0, text: 'Hi.', image: 'frames/a.jpg', start: 0 }])
+  const read = await readDeck(join(folder, 'deck.json'), [base])
+  assert.equal(read.audio, join(folder, 'narration.m4a'))
+  assert.equal(read.cues[0]!.image, join(folder, 'frames', 'a.jpg'))
+
+  await deck([{ scene: 0, text: 'Hi.', image: '../../secret.jpg', start: 0 }])
+  await assert.rejects(readDeck(join(folder, 'deck.json'), [base]), /Not a deck.json/)
+  await assert.rejects(readDeck(join(folder, 'deck.json'), [join(base, 'elsewhere')]), /Outside/)
 })
 
 test('spots links to media files by path', () => {

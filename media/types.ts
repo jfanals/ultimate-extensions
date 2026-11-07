@@ -16,6 +16,11 @@ export const TYPES: Record<string, string> = {
   '.webm': 'video/webm',
 }
 
+/** Whether an href is an absolute path to a narrated deck's manifest. */
+export function isDeck(href: string) {
+  return href.startsWith('/') && !href.startsWith('//') && href.endsWith('/deck.json')
+}
+
 /** The media type of an href that is an absolute path to a media file, else undefined. */
 export function mediaType(href: string) {
   if (!href.startsWith('/') || href.startsWith('//')) return undefined

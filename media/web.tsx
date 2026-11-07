@@ -1,37 +1,10 @@
 import { FileAudioIcon, FileVideoIcon, LoaderCircleIcon, PlayIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { actionRef, api, cn, defineWebExtension, errorMessage, formatBytes } from '@/sdk'
-import { mediaType } from './types.ts'
-
-/** `{ path }` → `{ type, size }` of a media file in a project folder (server.ts). */
-const InfoAction = actionRef<{ path: string }, { type: string; size: number }>('media', 'info')
-/** `{ path, offset }` → `{ type, size, data }`: up to 4 MB of it from `offset`, base64. */
-const ReadAction = actionRef<
-  { path: string; offset: number },
-  { type: string; size: number; data: string }
->('media', 'read')
-
-const MAX_BYTES = 150 * 1024 * 1024
-
-/** The file at `path` as a Blob URL, read chunk by chunk; `progress` gets the bytes read so far. */
-async function load(path: string, progress: (bytes: number) => void, signal: AbortSignal) {
-  const parts: Uint8Array<ArrayBuffer>[] = []
-  let offset = 0
-  let size = Infinity
-  let type = ''
-  while (offset < size) {
-    const chunk = await api.action(ReadAction, { path, offset }, { signal })
-    const bytes = Uint8Array.from(atob(chunk.data), (c) => c.charCodeAt(0))
-    // A file that shrank while it was read ends here rather than looping.
-    if (!bytes.length) break
-    parts.push(bytes)
-    ;({ size, type } = chunk)
-    offset += bytes.length
-    progress(offset)
-  }
-  return URL.createObjectURL(new Blob(parts, { type }))
-}
+import { api, cn, defineWebExtension, errorMessage, formatBytes } from '@/sdk'
+import { DeckCard } from './deck.tsx'
+import { InfoAction, load, MAX_BYTES } from './load.ts'
+import { isDeck, mediaType } from './types.ts'
 
 type State =
   | { kind: 'checking' }
@@ -161,7 +134,8 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
 export default defineWebExtension({
   link: ({ href, children, core }) => {
     const type = mediaType(href)
-    if (!type) return core
+    const deck = isDeck(href)
+    if (!type && !deck) return core
     let path: string
     try {
       path = decodeURI(href)
@@ -173,6 +147,6 @@ export default defineWebExtension({
       typeof children === 'string' && children && children !== href
         ? children
         : path.split('/').at(-1)
-    return <MediaCard label={label} path={path} type={type} />
+    return deck ? <DeckCard path={path} /> : <MediaCard label={label} path={path} type={type!} />
   },
 })

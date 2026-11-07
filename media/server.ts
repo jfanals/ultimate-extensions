@@ -1,5 +1,5 @@
 import { defineExtension, section } from '@earendil-works/pi-durable'
-import { readChunk, resolveMedia, rootsOf } from './media.ts'
+import { readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
 
 /** The parts of `ExtensionHost` (`server/extensions.ts`) this facet uses. */
 type Host = { projects(): Promise<{ root?: string; home: string }[]> }
@@ -11,13 +11,13 @@ export default defineExtension({
     section(
       'media',
       () =>
-        'To show the user an audio or video file, link its absolute path in Markdown: `[take 3](/Users/me/my-app/out/take-3.wav)`, spaces as %20. The transcript plays it inline. Only files inside a project folder play.',
+        'To show the user an audio or video file, link its absolute path in Markdown: `[take 3](/Users/me/my-app/out/take-3.wav)`, spaces as %20. The transcript plays it inline. A narrated deck plays the same way: link its `deck.json`. Only files inside a project folder play.',
     ),
   ],
 })
 
 // Only the transcript's player reads files; an agent has its own tools for that.
-export const userActions = ['info', 'read']
+export const userActions = ['info', 'read', 'deck']
 export const actions = {
   /** `{ path }` → `{ type, size }` of a media file in a project folder, or why it cannot be played. */
   info: async (args: unknown, { host }: Ctx) => {
@@ -25,6 +25,12 @@ export const actions = {
     if (typeof path !== 'string') throw new Error('Expected { path }')
     const media = await resolveMedia(path, await rootsOf(await host.projects()))
     return { type: media.type, size: media.size }
+  },
+  /** `{ path }` → a narrated deck's manifest, its audio and slide images as absolute paths for `read`. */
+  deck: async (args: unknown, { host }: Ctx) => {
+    const { path } = (args && typeof args === 'object' ? args : {}) as { path?: unknown }
+    if (typeof path !== 'string') throw new Error('Expected { path }')
+    return readDeck(path, await rootsOf(await host.projects()))
   },
   /** `{ path, offset }` → `{ type, size, data }`: up to 4 MB of a media file in a project folder, as base64. */
   read: async (args: unknown, { host }: Ctx) => {

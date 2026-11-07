@@ -6,6 +6,10 @@ An agent links a file by its absolute path, `[take 3](/Users/me/my-app/out/take-
 agent, in every project, to do so. The link becomes a card with the file's name and size and a play button; Play loads
 the file and shows the browser's own audio or video controls, with seeking.
 
+A link to a narrated deck's `deck.json` (written by the `narrated-demo` skill's `deck.py`) becomes a slide player:
+the first slide shows at once; Play loads the narration and the slides, and each slide shows with its spoken line,
+with slide skipping, a scrubber and full screen.
+
 ## Requirements
 
 - Ultimate (upstream, unpatched). Optional: its built-in tailscale extension, to play over the tailnet.
@@ -23,10 +27,14 @@ The `info` and `read` actions are user-only (the page calls them; agents cannot)
 every action: same-origin on the loopback page, the owner's Tailscale login over the tailnet. They read a file only
 when all of these hold:
 
-- the path is absolute and ends in a media extension (wav, mp3, m4a, aac, ogg, oga, opus, flac, mp4, m4v, mov, webm);
+- the path is absolute and ends in a media extension (wav, mp3, m4a, aac, ogg, oga, opus, flac, mp4, m4v, mov, webm),
+  or is a deck's slide image (jpg, png);
 - with symlinks resolved, it lies inside a project folder Ultimate knows (`host.projects()`), or that project's
   `attachments/` or `worktrees/` under its home;
-- its first bytes look like an audio or video container.
+- its first bytes look like an audio or video container, or a JPEG or PNG.
+
+The `deck` action reads a `deck.json` under the same folder rule and returns its narration and slide paths only when
+they lie inside the deck's own folder.
 
 Anything else answers with the reason the card shows: "Outside your project folders", "Not an audio or video file".
 

@@ -16,7 +16,7 @@ imports it from the clone (its README says which files it follows).
 | [speech](speech/)             | Local Parakeet speech to text and Kokoro text to speech, started on demand; Apple Silicon.         |
 | [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
-| [media](media/)               | Audio and video files that agents link play inline, on the Mac and over the tailnet.               |
+| [media](media/)               | Audio, video and narrated slide decks that agents link play inline, on the Mac and the tailnet.    |
 
 ## Install
 
