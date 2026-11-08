@@ -6,7 +6,8 @@ Picks the least-used Codex and Claude account once a day through a local CLIProx
 
 - Ultimate with its built-in Secrets and Automations extensions; Node 26.
 - CLIProxyAPI on `http://127.0.0.1:8317`, with Codex or Claude OAuth accounts.
-- Tested against CLIProxyAPI 7.3.10. The provider usage endpoints are not public contracts and may change.
+- Tested against CLIProxyAPI 7.3.10 and 8.0.60 (the v0 management routes remain available).
+  The provider usage endpoints are not public contracts and may change.
 
 ## Install
 
