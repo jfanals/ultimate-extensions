@@ -8,6 +8,7 @@ imports it from the clone (its README says which files it follows).
 
 | Extension                     | What it does                                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| [cliproxy](cliproxy/)         | Picks the least-used Codex and Claude account daily through a local CLIProxyAPI service.           |
 | [awake](awake/)               | Keeps the Mac from sleeping on AC power while agents work; macOS only.                             |
 | [project-icon](project-icon/) | Each project's tile: two initials on a colour from its name, for the favicon and Projects rows.    |
 | [tab-status](tab-status/)     | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
@@ -49,6 +50,7 @@ No restart: Ultimate reloads an extension when its files change.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.
 - **awake** works on macOS only.
+- **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
 
 The others stand alone. Each README lists its requirements, settings and tests.
 
@@ -58,7 +60,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts
+node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
