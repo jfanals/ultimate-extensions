@@ -18,6 +18,7 @@ imports it from the clone (its README says which files it follows).
 | [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
 | [media](media/)               | Audio, video and narrated slide decks that agents link play inline, on the Mac and the tailnet.    |
+| [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
 
 ## Install
 
