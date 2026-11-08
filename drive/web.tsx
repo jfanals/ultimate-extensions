@@ -314,6 +314,7 @@ function DriveScreen({ main }: { main: number }) {
   const [last, setLast] = useState<Utterance>()
   const [locked, setLocked] = useState(false)
   const [question, setQuestion] = useState<number>()
+  const [voice, setVoice] = useState<string>()
   const messages = useDocOf(1, MessagesDoc)?.messages
   const openQuestion =
     question !== undefined &&
@@ -323,7 +324,10 @@ function DriveScreen({ main }: { main: number }) {
 
   // Both engines take seconds to load cold: start them as the screen opens, and keep them warm while it is shown.
   const warm = () => {
-    api.action(WarmAction).catch((failure: unknown) => setError(errorMessage(failure)))
+    api
+      .action(WarmAction)
+      .then((warmed) => setVoice(warmed.voice))
+      .catch((failure: unknown) => setError(errorMessage(failure)))
   }
   useEffect(() => {
     warm()
@@ -614,6 +618,10 @@ function DriveScreen({ main }: { main: number }) {
             <SquareIcon className="size-6 fill-current" /> Stop
           </button>
         </div>
+        {/* Underdog Woof's licence asks apps that use it to show this credit. */}
+        {voice?.startsWith('woof:') && (
+          <p className="text-center text-xs text-muted-foreground/70">Voice by Underdog Woof</p>
+        )}
       </nav>
     </main>
   )

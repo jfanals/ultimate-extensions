@@ -13,7 +13,7 @@ imports it from the clone (its README says which files it follows).
 | [tab-status](tab-status/)     | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
 | [projects](projects/)         | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
 | [prompt-cache](prompt-cache/) | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
-| [speech](speech/)             | Local Parakeet speech to text and Kokoro text to speech, started on demand; Apple Silicon.         |
+| [speech](speech/)             | Local Parakeet speech to text, Underdog Woof and Kokoro text to speech, on demand; Apple Silicon.  |
 | [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
 | [media](media/)               | Audio, video and narrated slide decks that agents link play inline, on the Mac and the tailnet.    |
@@ -44,7 +44,7 @@ No restart: Ultimate reloads an extension when its files change.
   stay side by side as in the clone. Link project-icon too, or its `projectIcon` setting is not read.
 - **projects** needs **tab-status** and **project-icon**: it imports `../tab-status/status.ts` and the project-icon
   tile. Install all three.
-- **drive** needs **speech** (Kokoro for its voice, Parakeet for its talk button) and **voice** for local speech to
+- **drive** needs **speech** (Underdog Woof for its voice, Parakeet for its talk button) and **voice** for local speech to
   text; with Ultimate's built-in voice instead it transcribes through OpenAI only.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.

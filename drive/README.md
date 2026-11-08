@@ -1,10 +1,14 @@
 # Drive
 
-A hands-light screen for talking to @ultimate from a phone, which answers aloud with a local Kokoro voice.
+A hands-light screen for talking to @ultimate from a phone, which answers aloud with a local voice: Underdog Woof's
+Juno by default.
+
+Voice by Underdog Woof (<https://huggingface.co/ConwayResearch/Underdog-Woof>), free for non-commercial use only; the
+screen shows the same credit while a Woof voice speaks.
 
 ## Requirements
 
-- **speech**, from this repository, set up with Kokoro and Parakeet (see its README).
+- **speech**, from this repository, set up with Parakeet and the Underdog Woof download (see its README).
 - **voice**, from this repository, for local speech to text. Drive turns speech into text through voice's
   `transcribe` action, pointed at speech's local Parakeet by the `voice.transcriptionUrl` setting. With Ultimate's
   built-in voice instead, the talk button transcribes only through OpenAI (with an OpenAI API key in Secrets).
@@ -29,14 +33,14 @@ While the screen is open it reads aloud what is new for the user:
 In `~/.ultimate/settings.json`, read at each call:
 
 ```json
-{ "drive": { "voice": "af_heart" } }
+{ "drive": { "voice": "woof:juno" } }
 ```
 
-- `drive.voice`: a Kokoro voice; its first letter is the language (`a` American, `b` British English, …). Default
-  `af_heart`.
+- `drive.voice`: `woof:juno` (default) or `woof:mira` for Underdog Woof, or a Kokoro voice such as `af_heart` (its
+  first letter is the language: `a` American, `b` British English, …), which needs Kokoro installed.
 
-Kokoro's Python is `speech.python` (see speech's README). Without Kokoro, `speak` fails with the reason and the
-screen shows it.
+The Python is `speech.python` (see speech's README). Without the model, `speak` fails with the reason and the screen
+shows it.
 
 ## Install, update, uninstall
 
@@ -58,9 +62,9 @@ Ultimate picks up each change live; no restart.
   for a short, plain spoken answer (`SPOKEN` in `server.ts`), so no system-prompt section changes and the prompt cache
   stays warm; the transcript shows only what was said, marked "spoken". With `re`, `ask` answers that open message
   instead, as the user's reply.
-- **Speech out:** `speak { text }` returns a WAV from speech's Kokoro worker (the `speech` service), which starts on
-  demand and stops after `speech.idleMinutes` idle. The screen calls `warm` as it opens, on each Talk tap (not
-  awaited) and every minute while it is visible: it starts Parakeet and Kokoro and loads their models, or only restarts
+- **Speech out:** `speak { text }` returns a WAV from speech's worker for `drive.voice` (the `speech` service), which
+  starts on demand and stops after `speech.idleMinutes` idle. The screen calls `warm` as it opens, on each Talk tap (not
+  awaited) and every minute while it is visible: it starts Parakeet and the voice's engine and loads their models, or only restarts
   their idle clocks, so neither starts cold while Drive is in use. Once Drive is closed or hidden, the normal
   `speech.idleMinutes` countdown applies. The browser splits replies into sentences (`speech.ts`) and fetches the next
   one while the current one plays, so speech starts after the first sentence.

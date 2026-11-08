@@ -45,8 +45,8 @@ export type SubagentsService = {
   standing(name: string, ctx: Context): Promise<ConversationId>
 }
 
-/** `host.need({ name: 'speech' })`: the speech user extension's Kokoro voice (`SpeechService` in its `server.ts`). */
+/** `host.need({ name: 'speech' })`: the speech user extension's voices (`SpeechService` in its `server.ts`). */
 export type SpeechService = {
   speak(text: string, voice: string): Promise<Buffer>
-  warm(engine: 'kokoro' | 'parakeet', voice?: string): Promise<void>
+  warm(engine: 'kokoro' | 'woof' | 'parakeet', voice?: string): Promise<void>
 }

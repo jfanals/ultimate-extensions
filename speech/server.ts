@@ -19,43 +19,65 @@ type Host = {
 
 /** What other extensions call by name (`host.need({ name: 'speech' })`); Drive speaks through it. */
 export type SpeechService = {
-  /** The 24 kHz WAV of `text` in a Kokoro `voice`; empty text only loads the voice and returns no bytes. */
+  /**
+   * The 24 kHz WAV of `text` in `voice`: `woof:juno` or `woof:mira` is Underdog Woof, any other a Kokoro voice. Empty
+   * text only loads the voice and returns no bytes.
+   */
   speak(text: string, voice: string): Promise<Buffer>
   /** The text of the audio file at `path`, by Parakeet v3; an empty path only loads the model. */
   transcribe(path: string): Promise<string>
   /**
    * Start `engine` and load its model, or only restart its idle clock when it runs. Parakeet is warmed in the process
-   * serving `speech.port`, the one transcription reaches; Kokoro in this one, where `speak` runs.
+   * serving `speech.port`, the one transcription reaches; text to speech in this one, where `speak` runs, in the engine
+   * `voice` names (as `speak`), whether `engine` is `kokoro` or `woof`.
    */
-  warm(engine: 'kokoro' | 'parakeet', voice?: string): Promise<void>
+  warm(engine: 'kokoro' | 'woof' | 'parakeet', voice?: string): Promise<void>
 }
 const SpeechApi: { name: 'speech'; service?: SpeechService } = { name: 'speech' }
 
-type Settings = { python: string; idleMs: number; port: number }
+type Settings = { python: string; idleMs: number; port: number; woofDir: string }
 
-/** `speech.python`, `speech.idleMinutes` and `speech.port` in `~/.ultimate/settings.json`. */
+/** `speech.python`, `speech.idleMinutes`, `speech.port` and `speech.woofDir` in `~/.ultimate/settings.json`. */
 export async function settings(userHome: string): Promise<Settings> {
   // A missing or invalid settings file (reported where settings load) counts as unset here.
   const value: unknown = await readFile(join(userHome, '.ultimate/settings.json'), 'utf8')
     .then(JSON.parse)
     .catch(() => ({}))
-  const speech = (value as { speech?: { python?: unknown; idleMinutes?: unknown; port?: unknown } })
-    ?.speech
+  const speech = (
+    value as {
+      speech?: { python?: unknown; idleMinutes?: unknown; port?: unknown; woofDir?: unknown }
+    }
+  )?.speech
   const minutes = speech?.idleMinutes
   const port = speech?.port
   return {
     python: typeof speech?.python === 'string' && speech.python ? speech.python : 'python3',
     idleMs: (typeof minutes === 'number' && minutes > 0 ? minutes : 15) * 60_000,
     port: Number.isInteger(port) && (port as number) > 0 ? (port as number) : 8179,
+    woofDir:
+      typeof speech?.woofDir === 'string' && speech.woofDir
+        ? speech.woofDir
+        : join(userHome, '.ultimate/models/underdog-woof'),
   }
 }
 
-const SCRIPTS = { kokoro: 'kokoro-speak.py', parakeet: 'parakeet-transcribe.py' }
+const SCRIPTS = {
+  kokoro: 'kokoro-speak.py',
+  woof: 'woof-speak.py',
+  parakeet: 'parakeet-transcribe.py',
+}
 type Engine = keyof typeof SCRIPTS
 
-/** Starts `python script`, its stderr dropped: the protocol reports every failure on stdout. */
-function spawnWorker(python: string, script: string) {
-  const child = spawn(python, ['-I', join(import.meta.dirname, script)], {
+/** The text-to-speech engine and its own voice name for `voice`: `woof:juno` is Woof's `juno`, others are Kokoro's. */
+export function voiceEngine(voice: string): { engine: 'kokoro' | 'woof'; voice: string } {
+  return voice.startsWith('woof:')
+    ? { engine: 'woof', voice: voice.slice('woof:'.length) }
+    : { engine: 'kokoro', voice }
+}
+
+/** Starts `python script ...args`, its stderr dropped: the protocol reports every failure on stdout. */
+function spawnWorker(python: string, script: string, args: string[]) {
+  const child = spawn(python, ['-I', join(import.meta.dirname, script), ...args], {
     stdio: ['pipe', 'pipe', 'ignore'],
   })
   const exited = new Promise((resolve) => {
@@ -86,10 +108,11 @@ export default function speechExtension(host: Host) {
     return state
   })
 
-  /** The worker of `engine` for the current `speech.python`; a changed Python or script replaces it. */
+  /** The worker of `engine` for the current `speech.python`; a changed Python, script or model folder replaces it. */
   async function request(engine: Engine, body: object) {
-    const { python, idleMs } = await settings(host.userHome)
-    const key = `${engine}\0${python}\0${import.meta.dirname}`
+    const { python, idleMs, woofDir } = await settings(host.userHome)
+    const args = engine === 'woof' ? [woofDir] : []
+    const key = [engine, python, import.meta.dirname, ...args].join('\0')
     let worker = shared.workers.get(key)
     if (!worker) {
       for (const [old, stale] of shared.workers)
@@ -97,18 +120,21 @@ export default function speechExtension(host: Host) {
           stale.close()
           shared.workers.delete(old)
         }
-      worker = createWorker(() => spawnWorker(python, SCRIPTS[engine]))
+      worker = createWorker(() => spawnWorker(python, SCRIPTS[engine], args))
       shared.workers.set(key, worker)
     }
     return worker.request(body, idleMs)
   }
 
   const service: SpeechService = {
-    speak: (text, voice) => request('kokoro', { text, voice }),
+    speak: (text, voice) => {
+      const tts = voiceEngine(voice)
+      return request(tts.engine, { text, voice: tts.voice })
+    },
     transcribe: async (path) => (await request('parakeet', { path })).toString('utf8'),
-    warm: async (engine, voice = 'af_heart') => {
-      if (engine === 'kokoro') {
-        await request('kokoro', { text: '', voice })
+    warm: async (engine, voice = engine === 'woof' ? 'woof:juno' : 'af_heart') => {
+      if (engine !== 'parakeet') {
+        await service.speak('', voice)
         return
       }
       const { port } = await settings(host.userHome)

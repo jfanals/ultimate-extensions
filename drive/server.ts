@@ -36,7 +36,7 @@ async function voiceOf(host: Pick<Host, 'userHome'>): Promise<string> {
     .then(JSON.parse)
     .catch(() => ({}))
   const voice = (value as { drive?: { voice?: unknown } } | null)?.drive?.voice
-  return typeof voice === 'string' && voice ? voice : 'af_heart'
+  return typeof voice === 'string' && voice ? voice : 'woof:juno'
 }
 
 export default defineExtension({ name: 'drive' })
@@ -50,7 +50,8 @@ export const actions = {
   warm: async (_args: unknown, { host }: Ctx) => {
     const voice = await voiceOf(host)
     const speech = host.need(SpeechApi)
-    await Promise.all([speech.warm('parakeet'), speech.warm('kokoro', voice)])
+    const engine = voice.startsWith('woof:') ? 'woof' : 'kokoro'
+    await Promise.all([speech.warm('parakeet'), speech.warm(engine, voice)])
     return { voice }
   },
   /** `{ text }` → base64 WAV of it in `drive.voice`. */
