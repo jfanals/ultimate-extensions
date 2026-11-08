@@ -13,7 +13,7 @@ export type Waiting = {
 export type Here = { status: TabStatus; busy: number; waiting: Waiting[] }
 
 /** A row's state: an instance's own status, or why there is none. */
-export type RowState = TabStatus | 'stopped' | 'starting' | 'unreachable'
+export type RowState = TabStatus | 'stopped' | 'starting' | 'stopping' | 'unreachable'
 
 export type Row = {
   name: string
@@ -29,18 +29,42 @@ export type Row = {
   error?: string
 }
 
-export type Overview = { at: number; rows: Row[] }
+/** `hidden`: stopped projects the user hid from the list, by name and root. */
+export type Overview = {
+  at: number
+  rows: Row[]
+  hidden: { name: string; root: string }[]
+}
 
-/** How long a started project shows as starting before it counts as stopped again. */
+/** A folder under a root that is not a project yet; `at` is its latest activity (git, else the folder's own). */
+export type Folder = {
+  name: string
+  path: string
+  root: string
+  at: number
+  git: boolean
+}
+
+/** The roots new projects come from, and the folders in them that are not projects yet, most recent first. */
+export type Folders = { roots: string[]; folders: Folder[] }
+
+/** How long a started project shows as starting before it counts as stopped again; a stopped one as stopping. */
 export const STARTING_MS = 2 * 60_000
+export const STOPPING_MS = 30_000
 
-/** A project's row from the registry entry and its instance's answer (or failure); `startedAt` when Start ran. */
+/**
+ * A project's row from the registry entry and its instance's answer (or failure); `startedAt` when Start ran,
+ * `stoppingAt` when Stop ran.
+ */
 export function rowState(
   running: boolean,
   answer: { here: Here } | { error: string } | undefined,
   startedAt: number | undefined,
   now: number,
+  stoppingAt?: number,
 ): Pick<Row, 'state' | 'busy' | 'waiting' | 'error'> {
+  if (running && stoppingAt !== undefined && now - stoppingAt < STOPPING_MS)
+    return { state: 'stopping', busy: 0, waiting: [] }
   if (!running)
     return {
       state: startedAt !== undefined && now - startedAt < STARTING_MS ? 'starting' : 'stopped',
@@ -106,6 +130,21 @@ export function arrival(hash: string): { message?: number } | undefined {
   const match = new RegExp(`^${ARRIVAL}:(\\d+)$`).exec(hash)
   return match ? { message: Number(match[1]) } : undefined
 }
+
+/**
+ * Whether `name` may be a new project's folder: one plain path segment of letters, digits, `.`, `_` and `-`, not
+ * starting with a dot or dash, so it can never name a parent, a hidden folder or an option.
+ */
+export const validName = (name: string) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)
+
+/** Without the `projects.roots` setting: the folders that hold the projects already on this machine. */
+export const defaultRoots = (projectRoots: readonly string[]) => [
+  ...new Set(
+    projectRoots
+      .map((root) => root.replace(/\/+$/, '').replace(/\/[^/]+$/, ''))
+      .filter((parent) => parent !== ''),
+  ),
+]
 
 /** The environment a started project gets: this instance's ULTIMATE_* variables would make it share this home or port. */
 export const startEnv = (env: Readonly<Record<string, string | undefined>>) =>
