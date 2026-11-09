@@ -1,5 +1,6 @@
 import {
   ChevronRightIcon,
+  EllipsisIcon,
   FolderIcon,
   LayersIcon,
   LoaderCircleIcon,
@@ -7,6 +8,13 @@ import {
   XIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   actionRef,
   api,
@@ -26,6 +34,7 @@ import {
   useNow,
   useSystem,
   useUltimate,
+  useViewport,
 } from '@/sdk'
 import { tile } from '../project-icon/icon.ts'
 import { useOverrides } from '../project-icon/use-overrides.ts'
@@ -179,13 +188,22 @@ function Reveal() {
   return null
 }
 
-/** Go to a project in this window, at a question when given; within this project, without a reload. */
+/** The standing agents' conversations by name (subagents' `StandingDoc`): this project's @ultimate. */
+const StandingDoc = docRef<Record<string, number>>('ultimate.standing-agents')
+
+/**
+ * Go to a project in this window, at a question when given; within this project, without a reload, to its @ultimate
+ * when no question is given.
+ */
 function useNavigate() {
-  const { showSurface } = useUltimate()
+  const { showSurface, switchConversation } = useUltimate()
+  const ultimate = useDocOf(1, StandingDoc)?.ultimate
   const openQuestion = useOpenQuestion()
   return (row: Row, question?: Pick<Waiting, 'conversation' | 'message'>) => {
     if (row.current) {
-      if (!question || !openQuestion(question.message)) showSurface('agent')
+      if (question && openQuestion(question.message)) return
+      showSurface('agent')
+      if (ultimate !== undefined) switchConversation(ultimate)
       return
     }
     const url = projectUrl(location, row, question)
@@ -298,6 +316,178 @@ type Commands = {
   openWhenReady: (row: Row) => void
 }
 
+/** How far a swipe pulls a phone row left to show its action, and how far it must go to stay open. */
+const SWIPE_PX = 88
+const SWIPE_OPEN = SWIPE_PX * 0.4
+/** Movement under this is still a tap or a long press; past it the drag is locked to one direction. */
+const SLOP_PX = 10
+const LONG_PRESS_MS = 500
+
+/**
+ * A phone row's touch handling: swipe left to reveal its action, long press for its sheet. The row has `touch-action:
+ * pan-y`, so a vertical drag scrolls natively and never reaches the swipe; a horizontal one locks after `SLOP_PX`. A
+ * click that ends a swipe or a long press is swallowed so it does not also open the row.
+ */
+function useSwipe(enabled: boolean, onLongPress: () => void) {
+  const [offset, setOffset] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const gesture = useRef<{
+    x: number
+    y: number
+    base: number
+    mode: 'pending' | 'swipe' | 'scroll'
+  }>(undefined)
+  const press = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const swallow = useRef(false)
+  const area = useRef<HTMLLIElement>(null)
+  const open = offset !== 0
+  const close = () => setOffset(0)
+  // An open row closes on a touch anywhere else or on Escape, as iOS lists do.
+  useEffect(() => {
+    if (!open || dragging) return undefined
+    const outside = (event: PointerEvent) => {
+      if (!area.current?.contains(event.target as Node)) close()
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open, dragging])
+  useEffect(() => () => clearTimeout(press.current), [])
+  if (!enabled)
+    return {
+      area,
+      offset: 0,
+      dragging: false,
+      open: false,
+      close,
+      handlers: {},
+    }
+  const end = () => {
+    clearTimeout(press.current)
+    const mode = gesture.current?.mode
+    gesture.current = undefined
+    if (mode !== 'swipe') return
+    swallow.current = true
+    setDragging(false)
+    setOffset((value) => (value < -SWIPE_OPEN ? -SWIPE_PX : 0))
+  }
+  const handlers = {
+    onPointerDown: (event: ReactPointerEvent) => {
+      if (event.pointerType === 'mouse') return
+      swallow.current = false
+      gesture.current = {
+        x: event.clientX,
+        y: event.clientY,
+        base: offset,
+        mode: 'pending',
+      }
+      clearTimeout(press.current)
+      press.current = setTimeout(() => {
+        if (gesture.current?.mode !== 'pending') return
+        gesture.current = undefined
+        swallow.current = true
+        close()
+        onLongPress()
+      }, LONG_PRESS_MS)
+    },
+    onPointerMove: (event: ReactPointerEvent) => {
+      const current = gesture.current
+      if (!current || current.mode === 'scroll') return
+      const dx = event.clientX - current.x
+      const dy = event.clientY - current.y
+      if (current.mode === 'pending') {
+        if (Math.abs(dx) < SLOP_PX && Math.abs(dy) < SLOP_PX) return
+        clearTimeout(press.current)
+        current.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'scroll'
+        // Touch pointers are captured by the row they started on already: no setPointerCapture.
+        if (current.mode === 'scroll') return
+        setDragging(true)
+      }
+      setOffset(Math.max(-SWIPE_PX * 1.25, Math.min(0, current.base + dx)))
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onClickCapture: (event: ReactMouseEvent) => {
+      // The click a swipe or long press ends with does nothing; a tap on an open row only closes it, like iOS.
+      const swallowed = swallow.current
+      if (!swallowed && offset === 0) return
+      swallow.current = false
+      event.preventDefault()
+      event.stopPropagation()
+      if (!swallowed) close()
+    },
+    onContextMenu: (event: ReactMouseEvent) => event.preventDefault(),
+  }
+  return { area, offset, dragging, open, close, handlers }
+}
+
+type SheetAction = { text: string; run: () => void; tone?: string }
+
+/** A phone row's long-press actions as a bottom sheet, the same ones its swipe and the desktop's buttons offer. */
+function ActionSheet({
+  title,
+  actions,
+  onClose,
+}: {
+  title: string
+  actions: (SheetAction | false)[]
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [onClose])
+  const item = 'block min-h-12 w-full cursor-pointer px-4 text-left text-[15px] active:bg-accent'
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      data-projects-sheet
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        aria-label={title}
+        className="w-full overflow-hidden rounded-xl border border-border/70 bg-popover"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{title}</div>
+        {actions
+          .filter((action) => action !== false)
+          .map((action) => (
+            <button
+              className={cn(item, 'border-t border-border/60', action.tone)}
+              key={action.text}
+              onClick={() => {
+                onClose()
+                action.run()
+              }}
+              type="button"
+            >
+              {action.text}
+            </button>
+          ))}
+        <button
+          className={cn(item, 'border-t border-border/60 text-muted-foreground')}
+          onClick={onClose}
+          type="button"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function ProjectRow({
   row,
   commands,
@@ -312,97 +502,189 @@ function ProjectRow({
   const home = useSystem()?.machine.home
   const override = useOverrides()[row.name]
   const navigate = useNavigate()
+  const phone = useViewport() === 'phone'
   const [confirming, setConfirming] = useState(false)
+  const [sheet, setSheet] = useState(false)
   const running = row.port !== undefined
-  const stop = running && !row.current && row.state !== 'stopping' && (
-    <button
-      className={quiet}
-      disabled={pending}
-      onClick={() => (row.busy > 0 ? setConfirming(true) : commands.stop(row))}
-      type="button"
-    >
-      Stop
-    </button>
+  const canStop = running && !row.current && row.state !== 'stopping'
+  const stopped = row.state === 'stopped'
+  const stop = () => (row.busy > 0 ? setConfirming(true) : commands.stop(row))
+  /** What a tap on the row does: open it, or start it and open it once it answers. */
+  const primary = running
+    ? row.state === 'stopping'
+      ? undefined
+      : () => navigate(row)
+    : stopped
+      ? () => {
+          commands.start(row)
+          commands.openWhenReady(row)
+        }
+      : row.state === 'starting'
+        ? () => commands.openWhenReady(row)
+        : undefined
+  const label = row.current
+    ? `Open @ultimate in ${row.name}`
+    : running
+      ? `Open ${row.name}`
+      : stopped
+        ? `Start and open ${row.name}`
+        : `Open ${row.name} when ready`
+  // The phone row's swipe action: the one thing it does besides opening.
+  const swiped = canStop
+    ? { text: 'Stop', run: stop, tone: 'bg-amber-700 text-white' }
+    : stopped
+      ? {
+          text: 'Hide',
+          run: () => commands.hide(row),
+          tone: 'bg-zinc-600 text-white',
+        }
+      : undefined
+  const swipe = useSwipe(phone && !!swiped, () => setSheet(true))
+  const status = (
+    <span className={cn('font-mono text-[11.5px] text-muted-foreground', tones[row.state])}>
+      {stateText(row)}
+      {awaited && ' · opens when ready'}
+    </span>
   )
-  const action =
-    row.state === 'stopping' ? null : running ? (
-      row.current ? (
-        <span className="px-2.5 text-muted-foreground/60">here</span>
-      ) : (
-        <button className={button} onClick={() => navigate(row)} type="button">
-          Open
-        </button>
-      )
-    ) : row.state === 'stopped' ? (
-      <>
-        <button
-          className={button}
-          disabled={pending}
-          onClick={() => commands.start(row)}
-          type="button"
-        >
-          Start
-        </button>
-        <button
-          className={quiet}
-          disabled={pending}
-          onClick={() => commands.hide(row)}
-          title="Leave it out of this list; its folder and conversations stay"
-          type="button"
-        >
-          Hide
-        </button>
-      </>
-    ) : row.state === 'starting' ? (
-      <button
-        className={cn(quiet, awaited && 'text-foreground')}
-        disabled={awaited}
-        onClick={() => commands.openWhenReady(row)}
-        title="Opens it here as soon as it answers"
-        type="button"
-      >
-        {awaited ? 'opening…' : 'Open when ready'}
-      </button>
-    ) : null
   return (
     <li
-      className={cn(
-        'grid grid-cols-[auto_1fr_auto] items-center gap-x-3 px-3 py-2 md:grid-cols-[auto_13rem_1fr_9rem_8.5rem]',
-        row.current && 'bg-accent/40',
-      )}
+      className="relative overflow-hidden"
       data-project={row.name}
       data-state={row.state}
+      ref={swipe.area}
       title={row.error}
     >
-      <span className="flex w-2 justify-center">
-        <Dot state={row.state} />
-      </span>
-      <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-foreground">
-        <img alt="" className="size-[18px] shrink-0" src={tile(row.name, { override })} />
-        <span className="truncate">{row.name}</span>
-        {row.current && (
-          <span className="shrink-0 font-mono text-[11px] whitespace-nowrap text-muted-foreground">
-            this window
+      {phone && swiped && (
+        <button
+          aria-hidden={!swipe.open}
+          className={cn(
+            'absolute inset-y-0 right-0 flex cursor-pointer items-center justify-center text-[13px] font-semibold',
+            swiped.tone,
+          )}
+          data-swipe-action
+          disabled={pending}
+          onClick={() => {
+            swipe.close()
+            swiped.run()
+          }}
+          style={{ width: SWIPE_PX }}
+          tabIndex={swipe.open ? 0 : -1}
+          type="button"
+        >
+          {swiped.text}
+        </button>
+      )}
+      <div
+        className={cn(
+          'relative flex items-stretch bg-card',
+          phone && 'touch-pan-y select-none [-webkit-touch-callout:none]',
+          !swipe.dragging && 'transition-transform duration-200',
+        )}
+        style={swipe.offset ? { transform: `translateX(${swipe.offset}px)` } : undefined}
+        {...swipe.handlers}
+      >
+        <button
+          aria-label={label}
+          className={cn(
+            'grid min-h-14 min-w-0 flex-1 cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-3 px-3 py-2 text-left outline-none hover:bg-accent/50 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-default disabled:hover:bg-transparent md:min-h-11 md:grid-cols-[auto_13rem_1fr_9rem_auto]',
+            row.current && 'bg-accent/40',
+          )}
+          data-project-open
+          disabled={!primary || (stopped && pending)}
+          onClick={primary}
+          type="button"
+        >
+          <span className="flex w-2 justify-center">
+            <Dot state={row.state} />
+          </span>
+          <span className="min-w-0">
+            <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-foreground">
+              <img alt="" className="size-[18px] shrink-0" src={tile(row.name, { override })} />
+              <span className="truncate">{row.name}</span>
+              {row.current && (
+                <span className="shrink-0 font-mono text-[11px] whitespace-nowrap text-muted-foreground">
+                  this window
+                </span>
+              )}
+            </span>
+            <span className="mt-0.5 flex min-w-0 gap-1.5 md:hidden">
+              {status}
+              <span className="min-w-0 truncate font-mono text-[11px] leading-[17px] text-muted-foreground/70">
+                · {shortenPath(row.root, { home })}
+              </span>
+            </span>
+          </span>
+          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70 max-md:hidden">
+            {shortenPath(row.root, { home })}
+          </span>
+          <span className="max-md:hidden">{status}</span>
+          <ChevronRightIcon
+            className={cn('size-3.5 text-muted-foreground/60', !primary && 'invisible')}
+          />
+        </button>
+        {!phone && (
+          <span className="flex w-36 shrink-0 items-center justify-end gap-0.5 border-l border-border/50 px-2 font-mono text-[12px]">
+            {canStop && (
+              <button className={quiet} disabled={pending} onClick={stop} type="button">
+                Stop
+              </button>
+            )}
+            {stopped && (
+              <>
+                <button
+                  className={cn(button, 'border border-border/70')}
+                  disabled={pending}
+                  onClick={() => commands.start(row)}
+                  title="Start it and stay here"
+                  type="button"
+                >
+                  Start
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      aria-label={`More for ${row.name}`}
+                      className={cn(quiet, 'px-1.5')}
+                      disabled={pending}
+                      type="button"
+                    >
+                      <EllipsisIcon className="size-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="font-mono">
+                    <DropdownMenuItem className="text-[12px]" onSelect={() => commands.hide(row)}>
+                      Hide from this list
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
           </span>
         )}
-      </span>
-      <span className="col-start-2 row-start-2 min-w-0 truncate font-mono text-[11px] text-muted-foreground/70 md:col-start-auto md:row-start-auto">
-        {shortenPath(row.root, { home })}
-      </span>
-      <span
-        className={cn(
-          'col-start-2 row-start-3 font-mono text-[11.5px] text-muted-foreground md:col-start-auto md:row-start-auto',
-          tones[row.state],
-        )}
-      >
-        {stateText(row)}
-      </span>
-      <span className="col-start-3 row-span-3 row-start-1 flex flex-col items-end font-mono text-[12px] md:col-start-auto md:row-span-1 md:row-start-auto md:flex-row md:justify-end">
-        {stop}
-        {action}
-      </span>
+      </div>
+      {sheet && (
+        <ActionSheet
+          actions={[
+            canStop && {
+              text: `Stop ${row.name}`,
+              run: stop,
+              tone: tones['needs-you'],
+            },
+            stopped && {
+              text: `Start ${row.name}`,
+              run: () => commands.start(row),
+            },
+            stopped && {
+              text: 'Hide from this list',
+              run: () => commands.hide(row),
+            },
+          ]}
+          onClose={() => setSheet(false)}
+          title={row.name}
+        />
+      )}
       {confirming && (
-        <div className="col-span-3 mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 font-mono text-[11.5px] text-amber-700 md:col-span-4 md:col-start-2 dark:text-amber-300">
+        <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 font-mono text-[11.5px] text-amber-700 md:ml-8 dark:text-amber-300">
           <span>{row.busy} busy · their runs stop now and resume on the next Start</span>
           <span className="ml-auto flex gap-1">
             <button className={quiet} onClick={() => setConfirming(false)} type="button">

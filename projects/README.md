@@ -33,9 +33,17 @@ of them.
 
   Below, every question waiting on you across projects, oldest first.
 
-- **Open** goes to that project in the same window; a question opens it at the conversation that asked, scrolled to
-  the question's card. That project's own counter and Projects tab bring you back. Over the tailnet (HTTPS) links use
-  each project's tailnet port, else its loopback port.
+- **The whole row opens it.** Click or tap anywhere on a row: a running project opens in the same window, the
+  **this window** row opens this project's @ultimate, a stopped one starts and opens once it answers, a starting one
+  opens once it answers (the status adds `opens when ready`). The row is one button, so Tab reaches it and Enter opens
+  it. A question opens its project at the conversation that asked, scrolled to the question's card. That project's own
+  counter and Projects tab bring you back. Over the tailnet (HTTPS) links use each project's tailnet port, else its
+  loopback port.
+- **Desktop and tablet:** the one other action sits in its own column at the right, outside the row's button: **Stop**
+  on a running project, **Start** (start without opening) and **⋯** → **Hide** on a stopped one.
+- **Phone:** swipe a row left to show **Stop** (running) or **Hide** (stopped); a tap elsewhere, Escape or a tap on
+  the row closes it. A vertical drag scrolls the list as usual: the swipe only takes a drag that moves sideways first.
+  A long press opens the same actions as a sheet, for anyone who cannot or does not swipe.
 - **Start** runs the current Ultimate clone's `bin/ultimate.ts <root> --no-open` on the same Node, detached, without
   this instance's `ULTIMATE_*` variables, logging to `~/.ultimate/logs/<name>.log`.
 - **Stop** shuts another running project down cleanly: its supervisor gets SIGTERM, releases its core and lock, and
@@ -50,7 +58,7 @@ of them.
     (skipped without a git identity; Ultimate's setup offers it then), and starts Ultimate there.
 
   Either way the new row shows `starting…` and the page opens the project once it answers, at its @ultimate with
-  Ultimate's setup card. A row's **Open when ready** does the same for any starting project.
+  Ultimate's setup card.
 
 ## Settings
 
