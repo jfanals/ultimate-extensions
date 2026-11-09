@@ -9,6 +9,7 @@ import {
   resolveMedia,
   resolveText,
   rootsOf,
+  unlessMissing,
 } from './media.ts'
 import { isTextPath } from './types.ts'
 
@@ -59,17 +60,18 @@ export const actions = {
   },
   /**
    * `{ path }` → `{ type, size }` of a media file in a project folder, or `{ type: 'text', size, lines? }` of a text
-   * file, or why it cannot be shown.
+   * file, null when it does not exist, or why it cannot be shown.
    */
   info: async (args: unknown, { host }: Ctx) => {
     const path = pathArg(args)
     const roots = await rootsOf(await host.projects())
-    if (isTextPath(path)) {
-      const { size, lines } = await resolveText(path, roots)
-      return { type: 'text', size, lines }
-    }
-    const media = await resolveMedia(path, roots)
-    return { type: media.type, size: media.size }
+    if (isTextPath(path))
+      return unlessMissing(
+        resolveText(path, roots).then(({ size, lines }) => ({ type: 'text', size, lines })),
+      )
+    return unlessMissing(
+      resolveMedia(path, roots).then((media) => ({ type: media.type, size: media.size })),
+    )
   },
   /** `{ path }` → a narrated deck's manifest, its audio and slide images as absolute paths for `read`. */
   deck: async (args: unknown, { host }: Ctx) =>
@@ -91,12 +93,18 @@ export const actions = {
   },
   /**
    * `{ path, all? }` → `{ size, lines?, text, truncated }`: a text file in a project folder as it is on disk now, its
-   * first 2,000 lines within 200 KB, or with `all` up to 5 MB.
+   * first 2,000 lines within 200 KB, or with `all` up to 5 MB; null when it does not exist.
    */
   text: async (args: unknown, { host }: Ctx) => {
     const { all } = (args && typeof args === 'object' ? args : {}) as { all?: unknown }
-    const file = await resolveText(pathArg(args), await rootsOf(await host.projects()))
-    return { size: file.size, lines: file.lines, ...(await readText(file, all === true)) }
+    const roots = await rootsOf(await host.projects())
+    return unlessMissing(
+      resolveText(pathArg(args), roots).then(async (file) => ({
+        size: file.size,
+        lines: file.lines,
+        ...(await readText(file, all === true)),
+      })),
+    )
   },
   /** `{ path }`: open a text file in a project folder in Zed on this machine, `zeditor` (Arch's name) else `zed`. */
   edit: async (args: unknown, { host }: Ctx) => {

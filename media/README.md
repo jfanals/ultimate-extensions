@@ -16,7 +16,7 @@ line burned into its slide; their `deck.json` has no `"captions": true`) play as
 
 A link to a text file (`[plan](/Users/me/my-app/docs/plan.md)`) becomes a card with its name, size and line count.
 The prompt section asks agents to link files they wrote or mention this way. Tapping the card opens the file inline:
-Markdown renders as the transcript renders it, anything else shows with line numbers and the transcript's own Shiki
+Markdown renders as the transcript renders it, its relative links pointing at the files beside it, anything else shows with line numbers and the transcript's own Shiki
 highlighting. Full screen opens a viewer that fills a phone's screen; Copy copies the text shown; **Open in Zed** opens
 the file in Zed (`zeditor`, else `zed`, on PATH) on the machine Ultimate runs on, so only a page on that machine
 (loopback) shows it.

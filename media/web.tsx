@@ -30,12 +30,14 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
     api
       .action(InfoAction, { path })
       .then(
-        ({ size }) =>
+        (info) =>
           live &&
           setState(
-            size > MAX_BYTES
-              ? { kind: 'failed', reason: `${formatBytes(size)} · too large to play here` }
-              : { kind: 'ready', size },
+            !info
+              ? { kind: 'failed', reason: 'File no longer exists' }
+              : info.size > MAX_BYTES
+                ? { kind: 'failed', reason: `${formatBytes(info.size)} · too large to play here` }
+                : { kind: 'ready', size: info.size },
           ),
       )
       .catch((error: unknown) => live && setState({ kind: 'failed', reason: errorMessage(error) }))

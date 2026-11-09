@@ -86,13 +86,29 @@ export function isPathCandidate(code: string) {
 export function resolvePath(code: string, { cwd, home }: { cwd: string; home: string }) {
   if (!isPathCandidate(code)) return undefined
   const path = code.replace(LINE, '')
-  const full = path.startsWith('/')
-    ? path
-    : path.startsWith('~/')
-      ? `${home}/${path.slice(2)}`
-      : `${cwd}/${path}`
+  return normalize(
+    path.startsWith('/')
+      ? path
+      : path.startsWith('~/')
+        ? `${home}/${path.slice(2)}`
+        : `${cwd}/${path}`,
+  )
+}
+
+/**
+ * A link target in a Markdown file in `folder`, as the link renderer needs it: a relative path (`../README.md`,
+ * `docs/plan.md`) becomes absolute against that folder, without its `#fragment` or `?query`, escapes such as %20 kept;
+ * a URL, an absolute path or a `#heading` stays as written.
+ */
+export function resolveLink(url: string, folder: string) {
+  if (!url || /^[/#?]/.test(url) || /^[a-z][a-z\d+.-]*:/i.test(url)) return url
+  return normalize(`${encodeURI(folder)}/${url.replace(/[?#].*$/, '')}`)
+}
+
+/** An absolute path with `.`, `..` and doubled slashes resolved. */
+function normalize(path: string) {
   const parts: string[] = []
-  for (const part of full.split('/'))
+  for (const part of path.split('/'))
     if (part === '..') parts.pop()
     else if (part && part !== '.') parts.push(part)
   return `/${parts.join('/')}`

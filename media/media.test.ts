@@ -17,12 +17,14 @@ import {
   resolveMedia,
   resolveText,
   rootsOf,
+  unlessMissing,
 } from './media.ts'
 import {
   isPathCandidate,
   isText,
   MAX_TEXT_BYTES,
   mediaType,
+  resolveLink,
   resolvePath,
   TEXT_BYTES,
   TEXT_LINES,
@@ -233,6 +235,31 @@ test('opens inline code paths only to text files in project folders', async (t) 
     join(project, 'README.md'),
     join(project, 'README.md'),
   ])
+})
+
+test('answers null for a missing file instead of failing', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'media-')))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  await writeFile(join(base, 'notes.md'), '# Notes\n')
+  assert.equal(await unlessMissing(resolveText(join(base, 'gone.md'), [base])), null)
+  assert.equal((await unlessMissing(resolveText(join(base, 'notes.md'), [base])))?.lines, 1)
+  await assert.rejects(
+    unlessMissing(resolveText(join(base, 'notes.md'), ['/elsewhere'])),
+    /Outside/,
+  )
+})
+
+test('resolves relative links in a viewed Markdown file against its folder', () => {
+  const folder = '/Users/me/my-app/docs/extensions'
+  assert.equal(
+    resolveLink('../../extensions/README.md', folder),
+    '/Users/me/my-app/extensions/README.md',
+  )
+  assert.equal(resolveLink('slots.md#inline', folder), '/Users/me/my-app/docs/extensions/slots.md')
+  assert.equal(resolveLink('./a%20b.md', '/Users/me/my notes'), '/Users/me/my%20notes/a%20b.md')
+  assert.equal(resolveLink('https://example.com/a.md', folder), 'https://example.com/a.md')
+  assert.equal(resolveLink('/Users/me/plan.md', folder), '/Users/me/plan.md')
+  assert.equal(resolveLink('#heading', folder), '#heading')
 })
 
 test('spots links to media files by path', () => {

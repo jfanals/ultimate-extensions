@@ -10,8 +10,9 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
+import { defaultRemarkPlugins } from 'streamdown'
 import { CodeBlock, languageFromPath } from '@/components/ai/code-block'
 import { MessageResponse } from '@/components/ai/message'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -28,10 +29,14 @@ import {
 } from '@/sdk'
 import { store } from '@/sdk/client'
 import { InfoAction } from './load.ts'
+import { resolveLink } from './types.ts'
 
 type Text = { size: number; lines?: number; text: string; truncated: boolean }
-/** `{ path, all? }` → the text file as it is on disk now: its first 2,000 lines within 200 KB, or up to 5 MB (server.ts). */
-const TextAction = actionRef<{ path: string; all?: boolean }, Text>('media', 'text')
+/**
+ * `{ path, all? }` → the text file as it is on disk now: its first 2,000 lines within 200 KB, or up to 5 MB; null once
+ * it is gone (server.ts).
+ */
+const TextAction = actionRef<{ path: string; all?: boolean }, Text | null>('media', 'text')
 /** `{ path }`: opens the file in Zed on the machine Ultimate runs on (server.ts). */
 const EditAction = actionRef<{ path: string }, { editor: string }>('media', 'edit')
 
@@ -69,22 +74,27 @@ function useText(path: string, shown: boolean, onRead?: (text: Text | undefined)
     setBody({ kind: 'loading' })
     api.action(TextAction, { path }, { signal: controller.signal }).then(
       (text) => {
-        read(text)
-        setBody({ kind: 'shown', text, all: false })
+        read(text ?? undefined)
+        setBody(
+          text
+            ? { kind: 'shown', text, all: false }
+            : { kind: 'failed', reason: 'File no longer exists' },
+        )
       },
       (error: unknown) => {
-        if (controller.signal.aborted) return
-        const reason = errorMessage(error)
-        const missing = /not found/i.test(reason)
-        if (missing) read(undefined)
-        setBody({ kind: 'failed', reason: missing ? 'File no longer exists' : reason })
+        if (!controller.signal.aborted) setBody({ kind: 'failed', reason: errorMessage(error) })
       },
     )
     return () => controller.abort()
   }, [shown, path])
   const loadAll = () =>
     api.action(TextAction, { path, all: true }).then(
-      (text) => setBody({ kind: 'shown', text, all: true }),
+      (text) =>
+        setBody(
+          text
+            ? { kind: 'shown', text, all: true }
+            : { kind: 'failed', reason: 'File no longer exists' },
+        ),
       (error: unknown) => store.notify({ level: 'error', message: errorMessage(error) }),
     )
   return { body, loadAll }
@@ -111,12 +121,10 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
   useEffect(() => {
     let live = true
     api.action(InfoAction, { path }).then(
-      ({ size, lines }) => live && setInfo({ kind: 'ready', size, lines }),
-      (error: unknown) => {
-        if (!live) return
-        const reason = errorMessage(error)
-        setInfo(/not found/i.test(reason) ? { kind: 'missing' } : { kind: 'failed', reason })
-      },
+      (file) =>
+        live &&
+        setInfo(file ? { kind: 'ready', size: file.size, lines: file.lines } : { kind: 'missing' }),
+      (error: unknown) => live && setInfo({ kind: 'failed', reason: errorMessage(error) }),
     )
     return () => {
       live = false
@@ -270,9 +278,7 @@ function Contents({ body, path, loadAll }: { body?: Body; path: string; loadAll:
   return (
     <span className="block">
       {isMarkdown(path) ? (
-        <span className="mx-auto block max-w-3xl px-3.5 py-2.5">
-          <MessageResponse>{text}</MessageResponse>
-        </span>
+        <MarkdownFile path={path} text={text} />
       ) : (
         <CodeBlock
           className="rounded-none border-0"
@@ -291,6 +297,40 @@ function Contents({ body, path, loadAll }: { body?: Body; path: string; loadAll:
           )}
         </span>
       )}
+    </span>
+  )
+}
+
+type Mdast = { url?: unknown; children?: Mdast[] }
+/**
+ * A remark plugin: links and images in a Markdown file in `folder` point at the files beside it. Streamdown caches its
+ * processors by plugin name and options, so the folder is an option, never a closure.
+ */
+function resolveLinks({ folder }: { folder: string }) {
+  const walk = (node: Mdast) => {
+    if (typeof node.url === 'string') node.url = resolveLink(node.url, folder)
+    node.children?.forEach(walk)
+  }
+  return walk
+}
+
+/**
+ * A Markdown file rendered as the transcript renders messages, except that relative links resolve against the file's
+ * folder: Streamdown's rehype-harden would otherwise turn `../README.md` into `/README.md` and drop `docs/plan.md`, so
+ * this resolves them before it runs. `#123` is not a conversation in a file, so the transcript's mention chips stay out.
+ */
+function MarkdownFile({ path, text }: { path: string; text: string }) {
+  const folder = path.slice(0, path.lastIndexOf('/'))
+  const remarkPlugins = useMemo(
+    (): ComponentProps<typeof MessageResponse>['remarkPlugins'] => [
+      ...Object.values(defaultRemarkPlugins),
+      [resolveLinks, { folder }],
+    ],
+    [folder],
+  )
+  return (
+    <span className="mx-auto block max-w-3xl px-3.5 py-2.5">
+      <MessageResponse remarkPlugins={remarkPlugins}>{text}</MessageResponse>
     </span>
   )
 }

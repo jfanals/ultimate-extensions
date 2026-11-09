@@ -53,11 +53,28 @@ export async function rootsOf(projects: { root?: string; home: string }[]) {
   return [...new Set(real.filter((folder) => folder !== undefined))]
 }
 
+/** A file that does not exist: an answer the cards show quietly, not a failure. */
+class Missing extends Error {
+  constructor() {
+    super('File not found')
+  }
+}
+
+/**
+ * What `work` returns, or null when its file does not exist. Ultimate answers every action error with HTTP 500 and logs
+ * it, so a link to a deleted file answers null instead (#18969).
+ */
+export const unlessMissing = <T>(work: Promise<T>) =>
+  work.catch((error: unknown) => {
+    if (error instanceof Missing) return null
+    throw error
+  })
+
 /** `path` with symlinks resolved, when it is absolute and lies inside one of `roots`. */
 async function inRoots(path: string, roots: string[]) {
   if (!path.startsWith('/')) throw new Error('Not an absolute path')
   const real = await realpath(path).catch(() => {
-    throw new Error('File not found')
+    throw new Missing()
   })
   if (!roots.some((root) => real === root || real.startsWith(root + sep)))
     throw new Error('Outside your project folders')
