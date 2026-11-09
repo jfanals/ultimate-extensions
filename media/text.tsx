@@ -1,17 +1,14 @@
 import {
   CheckIcon,
-  ChevronDownIcon,
   CodeIcon,
   CopyIcon,
-  ExpandIcon,
   FileCodeIcon,
   FileTextIcon,
   FileXIcon,
-  LoaderCircleIcon,
   XIcon,
 } from 'lucide-react'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, KeyboardEvent, ReactNode } from 'react'
 import { defaultRemarkPlugins } from 'streamdown'
 import { CodeBlock, languageFromPath } from '@/components/ai/code-block'
 import { MessageResponse } from '@/components/ai/message'
@@ -101,22 +98,18 @@ function useText(path: string, shown: boolean, onRead?: (text: Text | undefined)
 }
 
 /**
- * A link to a text file on this machine, as a card: its name, size and lines. Opening it, inline or full screen, reads
- * the file as it is on disk now.
+ * A link to a text file on this machine, as a one-line chip in the text, like a `#id` mention: an icon and the link's
+ * label, with the path, size and lines on hover. It opens the full-screen viewer, which reads the file as it is now.
  */
 export function TextCard({ path, label }: { path: string; label: ReactNode }) {
   const [info, setInfo] = useState<Info>({ kind: 'checking' })
   const [open, setOpen] = useState(false)
-  const [full, setFull] = useState(false)
-  const name = path.split('/').at(-1) ?? path
-  const Icon = isMarkdown(path) ? FileTextIcon : FileCodeIcon
+  const home = useSystem()?.machine.home
   const onRead = (text: Text | undefined) => {
     if (text) return setInfo({ kind: 'ready', size: text.size, lines: text.lines })
     setInfo({ kind: 'missing' })
     setOpen(false)
-    setFull(false)
   }
-  const { body, loadAll } = useText(path, open, onRead)
 
   useEffect(() => {
     let live = true
@@ -131,78 +124,65 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
     }
   }, [path])
 
-  if (info.kind === 'missing' || info.kind === 'failed')
+  const where = shortenPath(path, { home })
+  const gone = info.kind === 'missing' || info.kind === 'failed'
+  const title =
+    info.kind === 'missing'
+      ? `${where} · File no longer exists`
+      : info.kind === 'failed'
+        ? `${where} · ${info.reason}`
+        : info.kind === 'ready'
+          ? `${where} · ${meta(info.size, info.lines)}`
+          : where
+  const Icon = gone ? FileXIcon : isMarkdown(path) ? FileTextIcon : FileCodeIcon
+  const content = (
+    <>
+      <Icon className="mr-1 inline size-3 align-[-1px] text-muted-foreground" />
+      <span className={cn(gone && 'line-through decoration-foreground/30')}>{label}</span>
+    </>
+  )
+  const keyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    setOpen(true)
+  }
+  if (gone)
     return (
-      <span className={card} data-ui="media-text" title={path}>
-        <span className="flex items-center gap-2.5 px-2.5 py-2">
-          <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground/70">
-            <FileXIcon className="size-5" strokeWidth={1.5} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] leading-5 text-muted-foreground">
-              {label}
-            </span>
-            <span
-              className={cn(
-                'block truncate text-[11px] leading-4 text-muted-foreground/80',
-                info.kind === 'failed' && 'text-destructive/80',
-              )}
-            >
-              {label === name ? '' : `${name} · `}
-              {info.kind === 'missing' ? 'File no longer exists' : info.reason}
-            </span>
-          </span>
-        </span>
+      <span className={cn(chip, 'text-muted-foreground')} data-ui="media-text" title={title}>
+        {content}
       </span>
     )
-
-  const note = info.kind === 'checking' ? 'Checking…' : meta(info.size, info.lines)
   return (
-    <span className={cn(card, open && 'max-w-none')} data-ui="media-text" title={path}>
-      <span className="flex items-center gap-1 pr-1.5">
-        <button
-          aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-2.5 text-left"
-          onClick={() => setOpen(!open)}
-          type="button"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
-            {info.kind === 'checking' || (open && body?.kind === 'loading') ? (
-              <LoaderCircleIcon className="size-5 motion-safe:animate-spin" />
-            ) : (
-              <Icon className="size-5" strokeWidth={1.5} />
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] leading-5 text-foreground/90">{label}</span>
-            <span className="block truncate text-[11px] leading-4 text-muted-foreground">
-              {label === name ? note : `${name} · ${note}`}
-            </span>
-          </span>
-          <ChevronDownIcon
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              open && 'rotate-180',
-            )}
-          />
-        </button>
-        {open && <Actions body={body} path={path} />}
-        <IconButton label="Full screen" onClick={() => setFull(true)}>
-          <ExpandIcon className="size-4" />
-        </IconButton>
+    <>
+      <span
+        aria-haspopup="dialog"
+        className={cn(
+          chip,
+          'cursor-pointer text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',
+        )}
+        data-ui="media-text"
+        onClick={() => setOpen(true)}
+        onKeyDown={keyDown}
+        role="button"
+        tabIndex={0}
+        title={title}
+      >
+        {content}
       </span>
-      {open && (
-        <span className="block max-h-[28rem] overflow-auto border-t border-border/60">
-          <Contents body={body} loadAll={loadAll} path={path} />
-        </span>
-      )}
-      <TextDialog onOpenChange={setFull} onRead={onRead} open={full} path={path} />
-    </span>
+      <TextDialog onOpenChange={setOpen} onRead={onRead} open={open} path={path} />
+    </>
   )
 }
 
 /**
- * The full-screen viewer of a text file: the card's Full screen, and a path in inline code. It fills a phone's screen
+ * The transcript's inline chip, as `#id` mentions and preview links draw it, but inline text rather than a box, so the
+ * punctuation after it stays on its line; it never breaks inside.
+ */
+const chip =
+  'rounded-sm bg-muted/60 px-1.5 py-0.5 font-mono text-[11.5px] leading-5 whitespace-nowrap'
+
+/**
+ * The full-screen viewer of a text file: what a link chip and a path in inline code open. It fills a phone's screen
  * and reads the file each time it opens.
  */
 export function TextDialog({
@@ -264,9 +244,6 @@ function Actions({ body, path }: { body?: Body; path: string }) {
     </>
   )
 }
-
-const card =
-  'my-1 inline-block w-full max-w-md overflow-hidden align-top rounded-md border border-border/80 bg-terminal not-prose'
 
 /** The file's text: Markdown rendered as the transcript renders it, anything else highlighted with line numbers. */
 function Contents({ body, path, loadAll }: { body?: Body; path: string; loadAll: () => void }) {

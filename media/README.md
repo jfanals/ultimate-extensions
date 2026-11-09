@@ -14,15 +14,16 @@ line burned into its slide; their `deck.json` has no `"captions": true`) play as
 
 ## Text files
 
-A link to a text file (`[plan](/Users/me/my-app/docs/plan.md)`) becomes a card with its name, size and line count.
-The prompt section asks agents to link files they wrote or mention this way. Tapping the card opens the file inline:
-Markdown renders as the transcript renders it, its relative links pointing at the files beside it, anything else shows with line numbers and the transcript's own Shiki
-highlighting. Full screen opens a viewer that fills a phone's screen; Copy copies the text shown; **Open in Zed** opens
-the file in Zed (`zeditor`, else `zed`, on PATH) on the machine Ultimate runs on, so only a page on that machine
-(loopback) shows it.
+A link to a text file (`[plan](/Users/me/my-app/docs/plan.md)`) becomes a one-line chip in the text, styled like a
+`#id` mention: a file icon and the link's label, with the path, size and line count on hover. The prompt section asks
+agents to link files they wrote or mention this way. A click, a tap, or Enter once focused opens the file in a viewer
+that fills a phone's screen: Markdown renders as the transcript renders it, its relative links pointing at the files
+beside it; anything else shows with line numbers and the transcript's own Shiki highlighting. Copy copies the text
+shown; **Open in Zed** opens the file in Zed (`zeditor`, else `zed`, on PATH) on the machine Ultimate runs on, so only
+a page on that machine (loopback) shows it.
 
-The file is read when it is opened, never from the message: it shows what is on disk now, and a deleted file shows
-"File no longer exists". The first view holds the first 2,000 lines within 200 KB; **Load all** reads up to 5 MB.
+The file is read when it is opened, never from the message: it shows what is on disk now. A deleted file's chip is
+struck through and says "File no longer exists" on hover. The first view holds the first 2,000 lines within 200 KB; **Load all** reads up to 5 MB.
 
 What counts as text: an extension for notes, data, logs or source code (md, txt, json, yaml, toml, csv, log, ts, py,
 …), or a known name (`Makefile`, `Dockerfile`, `.gitignore`), and no NUL byte in the first 8 KB, git's test for
@@ -96,5 +97,5 @@ node --test media/media.test.ts
 
 They cover what may be read (project folders only, symlinks resolved, media bytes only), which files count as text and
 the size caps of the text viewer, subtitles beside a video, how links are spotted, and which inline code spans count
-as paths, how they resolve (relative, `~/`, absolute) and that only text files in project folders open. The cards and
+as paths, how they resolve (relative, `~/`, absolute) and that only text files in project folders open. The cards, chips and
 the inline code links themselves were checked on the running host.
