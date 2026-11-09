@@ -1,10 +1,10 @@
 import { actionRef, api } from '@/sdk'
 
-/** `{ path }` → `{ type, size }` of a media file in a project folder (server.ts). */
-export const InfoAction = actionRef<{ path: string }, { type: string; size: number }>(
-  'media',
-  'info',
-)
+/** `{ path }` → `{ type, size }` of a media file in a project folder, with `lines` for a text file (server.ts). */
+export const InfoAction = actionRef<
+  { path: string },
+  { type: string; size: number; lines?: number }
+>('media', 'info')
 /** `{ path, offset }` → `{ type, size, data }`: up to 4 MB of it from `offset`, base64. */
 const ReadAction = actionRef<
   { path: string; offset: number },

@@ -4,7 +4,7 @@
  */
 import { open, readFile, realpath, stat } from 'node:fs/promises'
 import { dirname, extname, join, normalize, sep } from 'node:path'
-import { TYPES } from './types.ts'
+import { isTextPath, MAX_TEXT_BYTES, TEXT_BYTES, TEXT_LINES, TYPES } from './types.ts'
 
 /** The largest file the player loads (it plays from memory, so a phone holds all of it). */
 export const MAX_BYTES = 150 * 1024 * 1024
@@ -86,6 +86,62 @@ export async function resolveMedia(path: string, roots: string[]): Promise<Media
     await file.close()
   }
   return { path: real, type, size: info.size }
+}
+
+export type TextFile = { path: string; size: number; lines?: number }
+
+/**
+ * `path` as a text file the viewer may show: absolute, a text extension or name, inside one of `roots` once symlinks
+ * resolve, a regular file with no NUL byte in its first 8 KB (git's test for binary). `lines` is counted up to
+ * `MAX_TEXT_BYTES`; a longer file has none.
+ */
+export async function resolveText(path: string, roots: string[]): Promise<TextFile> {
+  if (!isTextPath(path)) throw new Error('Not a text file')
+  const real = await inRoots(path, roots)
+  if (!isTextPath(real)) throw new Error('Not a text file')
+  const info = await stat(real)
+  if (!info.isFile()) throw new Error('Not a file')
+  const bytes = await readHead(real, Math.min(info.size, MAX_TEXT_BYTES))
+  if (bytes.subarray(0, 8192).includes(0)) throw new Error('Not a text file')
+  const lines = info.size > MAX_TEXT_BYTES ? undefined : countLines(bytes)
+  return { path: real, size: info.size, lines }
+}
+
+/**
+ * The text of a resolved file as the viewer shows it: the first `TEXT_LINES` lines within `TEXT_BYTES`, or with `all`
+ * the whole file up to `MAX_TEXT_BYTES`. A cut ends at a line break; `truncated` says there is more.
+ */
+export async function readText(file: TextFile, all = false) {
+  const bytes = await readHead(file.path, Math.min(file.size, all ? MAX_TEXT_BYTES : TEXT_BYTES))
+  let end = bytes.length
+  if (end < file.size) end = bytes.lastIndexOf(10) + 1 || end
+  if (!all) {
+    let line = 0
+    for (let i = 0; i < end; i++)
+      if (bytes[i] === 10 && ++line === TEXT_LINES) {
+        end = i + 1
+        break
+      }
+  }
+  return { text: bytes.toString('utf8', 0, end), truncated: end < file.size }
+}
+
+const countLines = (bytes: Buffer) => {
+  let lines = 0
+  for (let i = bytes.indexOf(10); i !== -1; i = bytes.indexOf(10, i + 1)) lines++
+  return bytes.length && bytes[bytes.length - 1] !== 10 ? lines + 1 : lines
+}
+
+/** The first `length` bytes of the file at `path`. */
+async function readHead(path: string, length: number) {
+  const file = await open(path, 'r')
+  try {
+    const bytes = Buffer.alloc(length)
+    const { bytesRead } = await file.read(bytes, 0, length, 0)
+    return bytes.subarray(0, bytesRead)
+  } finally {
+    await file.close()
+  }
 }
 
 /** Bytes `offset` up to `offset + CHUNK_BYTES` of a resolved file, within the size cap. */

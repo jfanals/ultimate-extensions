@@ -7,8 +7,17 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CHUNK_BYTES, readCaptions, readChunk, readDeck, resolveMedia, rootsOf } from './media.ts'
-import { mediaType } from './types.ts'
+import {
+  CHUNK_BYTES,
+  readCaptions,
+  readChunk,
+  readDeck,
+  readText,
+  resolveMedia,
+  resolveText,
+  rootsOf,
+} from './media.ts'
+import { isText, MAX_TEXT_BYTES, mediaType, TEXT_BYTES, TEXT_LINES } from './types.ts'
 
 const wav = (bytes: number) => {
   const data = Buffer.alloc(bytes)
@@ -94,6 +103,60 @@ test('gives a video the subtitles beside it as WebVTT', async (t) => {
     'WEBVTT\n\n1\n00:00:00.600 --> 00:00:05.250\nHello.\n',
   )
   assert.equal(await readCaptions(join(base, 'bare.mp4'), [base]), null)
+})
+
+test('shows text files in project folders, capped, and nothing binary', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'media-')))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  await writeFile(join(base, 'notes.md'), '# Notes\n\nOne.\nTwo')
+  await writeFile(join(base, 'Makefile'), 'all:\n')
+  await writeFile(join(base, 'fake.ts'), Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]))
+  await writeFile(join(base, 'take.wav'), 'RIFF')
+  // Many short lines: the line cap ends the first view before the byte cap.
+  await writeFile(join(base, 'run.log'), 'ok\n'.repeat(TEXT_LINES * 2))
+  // A few long lines: the byte cap ends it, at a line break.
+  const line = `${'x'.repeat(999)}\n`
+  await writeFile(join(base, 'big.log'), line.repeat(Math.ceil(TEXT_BYTES / 1000) + 100))
+  await writeFile(join(base, 'huge.log'), line.repeat(Math.ceil(MAX_TEXT_BYTES / 1000) + 1))
+  const roots = [base]
+
+  const notes = await resolveText(join(base, 'notes.md'), roots)
+  assert.deepEqual(notes, { path: join(base, 'notes.md'), size: 17, lines: 4 })
+  assert.deepEqual(await readText(notes), { text: '# Notes\n\nOne.\nTwo', truncated: false })
+  assert.equal((await resolveText(join(base, 'Makefile'), roots)).lines, 1)
+
+  const log = await readText(await resolveText(join(base, 'run.log'), roots))
+  assert.equal(log.text, 'ok\n'.repeat(TEXT_LINES))
+  assert.equal(log.truncated, true)
+  const big = await resolveText(join(base, 'big.log'), roots)
+  const first = await readText(big)
+  assert.equal(first.text.length, Math.floor(TEXT_BYTES / 1000) * 1000)
+  assert.equal(first.truncated, true)
+  assert.deepEqual(await readText(big, true), { text: line.repeat(big.lines!), truncated: false })
+  const huge = await resolveText(join(base, 'huge.log'), roots)
+  assert.equal(huge.lines, undefined)
+  const all = await readText(huge, true)
+  assert.equal(all.truncated, true)
+  assert.ok(all.text.length <= MAX_TEXT_BYTES && all.text.endsWith('\n'))
+
+  await assert.rejects(resolveText(join(base, 'fake.ts'), roots), /Not a text file/)
+  await assert.rejects(resolveText(join(base, 'take.wav'), roots), /Not a text file/)
+  await assert.rejects(resolveText(join(base, 'gone.md'), roots), /File not found/)
+  await assert.rejects(resolveText(join(base, 'notes.md'), [join(base, 'x')]), /Outside/)
+})
+
+test('spots links to text files by path', () => {
+  assert.equal(isText('/Users/me/my-app/docs/plan%20v2.md'), true)
+  assert.equal(isText('/Users/me/my-app/src/app.TS'), true)
+  assert.equal(isText('/Users/me/my-app/Dockerfile'), true)
+  assert.equal(isText('/Users/me/my-app/.gitignore'), true)
+  assert.equal(isText('/Users/me/my-app/.env'), false)
+  assert.equal(isText('/Users/me/my-app/.env.local'), false)
+  assert.equal(isText('/Users/me/my-app/.npmrc'), false)
+  assert.equal(isText('/Users/me/talk.deck/deck.json'), false)
+  assert.equal(isText('/Users/me/out/take.wav'), false)
+  assert.equal(isText('https://example.com/a.md'), false)
+  assert.equal(isText('docs/plan.md'), false)
 })
 
 test('spots links to media files by path', () => {

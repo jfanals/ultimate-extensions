@@ -5,7 +5,8 @@ import { actionRef, api, cn, defineWebExtension, errorMessage, formatBytes } fro
 import { DeckCard } from './deck.tsx'
 import { toggleFullscreen, useCaptions, usePlayerKeys } from './keys.ts'
 import { InfoAction, load, MAX_BYTES } from './load.ts'
-import { isDeck, mediaType } from './types.ts'
+import { TextCard } from './text.tsx'
+import { isDeck, isText, mediaType } from './types.ts'
 
 /** `{ path }` → the WebVTT subtitles beside a video (its `.vtt` or `.srt`), or null (server.ts). */
 const CaptionsAction = actionRef<{ path: string }, string | null>('media', 'captions')
@@ -190,7 +191,8 @@ export default defineWebExtension({
   link: ({ href, children, core }) => {
     const type = mediaType(href)
     const deck = isDeck(href)
-    if (!type && !deck) return core
+    const text = isText(href)
+    if (!type && !deck && !text) return core
     let path: string
     try {
       path = decodeURI(href)
@@ -202,6 +204,8 @@ export default defineWebExtension({
       typeof children === 'string' && children && children !== href
         ? children
         : path.split('/').at(-1)
-    return deck ? <DeckCard path={path} /> : <MediaCard label={label} path={path} type={type!} />
+    if (deck) return <DeckCard path={path} />
+    if (text) return <TextCard label={label} path={path} />
+    return <MediaCard label={label} path={path} type={type!} />
   },
 })
