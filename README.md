@@ -19,6 +19,7 @@ imports it from the clone (its README says which files it follows).
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
 | [media](media/)               | Audio, video, decks and text files that agents link or name in inline code play or open inline.    |
 | [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
+| [todos-badge](todos-badge/)   | The To-dos tab counts what waits on you: amber while a question does, grey for only your to-dos.   |
 
 ## Install
 
@@ -51,6 +52,7 @@ No restart: Ultimate reloads an extension when its files change.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.
 - **awake** works on macOS only.
+- **todos-badge** needs an Ultimate whose web SDK has `panelBadges`; on an older one it loads and shows nothing.
 - **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
 
 The others stand alone. Each README lists its requirements, settings and tests.
@@ -61,7 +63,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts
+node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
