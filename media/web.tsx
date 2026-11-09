@@ -2,11 +2,12 @@ import { FileAudioIcon, FileVideoIcon, LoaderCircleIcon, PlayIcon } from 'lucide
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { actionRef, api, cn, defineWebExtension, errorMessage, formatBytes } from '@/sdk'
+import { PathCode } from './code.tsx'
 import { DeckCard } from './deck.tsx'
 import { toggleFullscreen, useCaptions, usePlayerKeys } from './keys.ts'
 import { InfoAction, load, MAX_BYTES } from './load.ts'
 import { TextCard } from './text.tsx'
-import { isDeck, isText, mediaType } from './types.ts'
+import { isDeck, isPathCandidate, isText, mediaType } from './types.ts'
 
 /** `{ path }` → the WebVTT subtitles beside a video (its `.vtt` or `.srt`), or null (server.ts). */
 const CaptionsAction = actionRef<{ path: string }, string | null>('media', 'captions')
@@ -188,6 +189,8 @@ function MediaCard({ path, type, label }: { path: string; type: string; label: R
 }
 
 export default defineWebExtension({
+  inlineCode: ({ code, core }) =>
+    isPathCandidate(code) ? <PathCode code={code} core={core} /> : core,
   link: ({ href, children, core }) => {
     const type = mediaType(href)
     const deck = isDeck(href)

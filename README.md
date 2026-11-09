@@ -17,7 +17,7 @@ imports it from the clone (its README says which files it follows).
 | [speech](speech/)             | Local Parakeet speech to text, Underdog Woof and Kokoro text to speech, on demand; Apple Silicon.  |
 | [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
 | [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
-| [media](media/)               | Audio, video, narrated decks and text files that agents link play or open inline, Mac and tailnet. |
+| [media](media/)               | Audio, video, decks and text files that agents link or name in inline code play or open inline.    |
 | [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
 
 ## Install

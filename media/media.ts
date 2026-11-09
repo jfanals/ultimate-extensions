@@ -96,15 +96,41 @@ export type TextFile = { path: string; size: number; lines?: number }
  * `MAX_TEXT_BYTES`; a longer file has none.
  */
 export async function resolveText(path: string, roots: string[]): Promise<TextFile> {
+  const { real, size } = await textIn(path, roots)
+  const lines =
+    size > MAX_TEXT_BYTES
+      ? undefined
+      : countLines(await readHead(real, Math.min(size, MAX_TEXT_BYTES)))
+  return { path: real, size, lines }
+}
+
+/** `path` with symlinks resolved and its size, when the viewer may show it (the checks of `resolveText`). */
+async function textIn(path: string, roots: string[]) {
   if (!isTextPath(path)) throw new Error('Not a text file')
   const real = await inRoots(path, roots)
   if (!isTextPath(real)) throw new Error('Not a text file')
   const info = await stat(real)
   if (!info.isFile()) throw new Error('Not a file')
-  const bytes = await readHead(real, Math.min(info.size, MAX_TEXT_BYTES))
-  if (bytes.subarray(0, 8192).includes(0)) throw new Error('Not a text file')
-  const lines = info.size > MAX_TEXT_BYTES ? undefined : countLines(bytes)
-  return { path: real, size: info.size, lines }
+  if ((await readHead(real, Math.min(info.size, 8192))).includes(0))
+    throw new Error('Not a text file')
+  return { real, size: info.size }
+}
+
+/**
+ * The absolute `paths` the viewer would open, in order: the check behind clickable inline code, so it reads at most
+ * 8 KB of each file and counts no lines.
+ */
+export async function existingText(paths: string[], roots: string[]) {
+  const shown = await Promise.all(
+    // A path that is missing, outside the roots or binary is simply not a file to open.
+    paths.map((path) =>
+      textIn(path, roots).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  )
+  return paths.filter((_, index) => shown[index])
 }
 
 /**

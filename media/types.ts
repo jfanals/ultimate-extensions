@@ -56,6 +56,48 @@ export function isText(href: string) {
   return href.startsWith('/') && !href.startsWith('//') && !isDeck(href) && isTextPath(href)
 }
 
+/** A `:line` or `:line:column` after a path, as compilers and agents write `src/app.ts:42`. */
+const LINE = /:\d+(?::\d+)?$/
+/** Characters no path an agent mentions has, but commands, globs and prose do. */
+const NOT_PATH = /[\s*?<>|$&;'"`(){}[\]\\!=,#]/
+
+/**
+ * Whether an inline code span looks like a path to a text file (`src/app.ts`, `~/notes.md`, `README.md:12`): a text
+ * extension or name, no spaces or shell syntax, not a URL or an option. The cheap test before asking the server.
+ */
+export function isPathCandidate(code: string) {
+  const path = code.replace(LINE, '')
+  return (
+    path.length > 0 &&
+    path.length <= 300 &&
+    !NOT_PATH.test(path) &&
+    !/^[a-z][a-z\d+.-]*:/i.test(path) && // https:, mailto:, file:
+    !path.startsWith('//') &&
+    !path.startsWith('-') &&
+    (!path.startsWith('~') || path.startsWith('~/')) &&
+    isTextPath(path)
+  )
+}
+
+/**
+ * The absolute path an inline code span names: absolute as written, `~/…` under `home`, anything else under `cwd`, with
+ * `.` and `..` resolved and any `:line` dropped. Undefined when it is not a path candidate.
+ */
+export function resolvePath(code: string, { cwd, home }: { cwd: string; home: string }) {
+  if (!isPathCandidate(code)) return undefined
+  const path = code.replace(LINE, '')
+  const full = path.startsWith('/')
+    ? path
+    : path.startsWith('~/')
+      ? `${home}/${path.slice(2)}`
+      : `${cwd}/${path}`
+  const parts: string[] = []
+  for (const part of full.split('/'))
+    if (part === '..') parts.pop()
+    else if (part && part !== '.') parts.push(part)
+  return `/${parts.join('/')}`
+}
+
 /** What the viewer shows at first: about 200 KB or 2,000 lines, whichever ends first. */
 export const TEXT_BYTES = 200 * 1024
 export const TEXT_LINES = 2000

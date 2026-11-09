@@ -10,7 +10,7 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CodeBlock, languageFromPath } from '@/components/ai/code-block'
 import { MessageResponse } from '@/components/ai/message'
@@ -54,6 +54,43 @@ const meta = (size: number, lines?: number) =>
     : `${formatBytes(size)} · ${lines.toLocaleString()} ${lines === 1 ? 'line' : 'lines'}`
 
 /**
+ * The file's text while `shown`, read afresh each time it shows (closing forgets it). `onRead` gets each read, or
+ * undefined once the file is gone.
+ */
+function useText(path: string, shown: boolean, onRead?: (text: Text | undefined) => void) {
+  const [body, setBody] = useState<Body>()
+  const read = useEffectEvent((text: Text | undefined) => onRead?.(text))
+  useEffect(() => {
+    const controller = new AbortController()
+    if (!shown) {
+      setBody(undefined)
+      return () => controller.abort()
+    }
+    setBody({ kind: 'loading' })
+    api.action(TextAction, { path }, { signal: controller.signal }).then(
+      (text) => {
+        read(text)
+        setBody({ kind: 'shown', text, all: false })
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted) return
+        const reason = errorMessage(error)
+        const missing = /not found/i.test(reason)
+        if (missing) read(undefined)
+        setBody({ kind: 'failed', reason: missing ? 'File no longer exists' : reason })
+      },
+    )
+    return () => controller.abort()
+  }, [shown, path])
+  const loadAll = () =>
+    api.action(TextAction, { path, all: true }).then(
+      (text) => setBody({ kind: 'shown', text, all: true }),
+      (error: unknown) => store.notify({ level: 'error', message: errorMessage(error) }),
+    )
+  return { body, loadAll }
+}
+
+/**
  * A link to a text file on this machine, as a card: its name, size and lines. Opening it, inline or full screen, reads
  * the file as it is on disk now.
  */
@@ -61,10 +98,15 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
   const [info, setInfo] = useState<Info>({ kind: 'checking' })
   const [open, setOpen] = useState(false)
   const [full, setFull] = useState(false)
-  const [body, setBody] = useState<Body>()
   const name = path.split('/').at(-1) ?? path
-  const home = useSystem()?.machine.home
   const Icon = isMarkdown(path) ? FileTextIcon : FileCodeIcon
+  const onRead = (text: Text | undefined) => {
+    if (text) return setInfo({ kind: 'ready', size: text.size, lines: text.lines })
+    setInfo({ kind: 'missing' })
+    setOpen(false)
+    setFull(false)
+  }
+  const { body, loadAll } = useText(path, open, onRead)
 
   useEffect(() => {
     let live = true
@@ -80,50 +122,6 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
       live = false
     }
   }, [path])
-
-  const shown = open || full
-  // Closing forgets the text, so opening it again reads the file afresh.
-  useEffect(() => {
-    const controller = new AbortController()
-    if (!shown) {
-      setBody(undefined)
-      return () => controller.abort()
-    }
-    setBody({ kind: 'loading' })
-    api.action(TextAction, { path }, { signal: controller.signal }).then(
-      (text) => {
-        setInfo({ kind: 'ready', size: text.size, lines: text.lines })
-        setBody({ kind: 'shown', text, all: false })
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return
-        const reason = errorMessage(error)
-        if (/not found/i.test(reason)) {
-          setInfo({ kind: 'missing' })
-          setOpen(false)
-          setFull(false)
-        } else setBody({ kind: 'failed', reason })
-      },
-    )
-    return () => controller.abort()
-  }, [shown, path])
-
-  const loadAll = () =>
-    api.action(TextAction, { path, all: true }).then(
-      (text) => setBody({ kind: 'shown', text, all: true }),
-      (error: unknown) => store.notify({ level: 'error', message: errorMessage(error) }),
-    )
-  const text = body?.kind === 'shown' ? body.text.text : undefined
-  const actions = (
-    <>
-      {text !== undefined && <CopyButton text={text} />}
-      {onHost && (
-        <IconButton label="Open in Zed" onClick={() => edit(path)}>
-          <CodeIcon className="size-4" />
-        </IconButton>
-      )}
-    </>
-  )
 
   if (info.kind === 'missing' || info.kind === 'failed')
     return (
@@ -180,7 +178,7 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
             )}
           />
         </button>
-        {open && actions}
+        {open && <Actions body={body} path={path} />}
         <IconButton label="Full screen" onClick={() => setFull(true)}>
           <ExpandIcon className="size-4" />
         </IconButton>
@@ -190,33 +188,72 @@ export function TextCard({ path, label }: { path: string; label: ReactNode }) {
           <Contents body={body} loadAll={loadAll} path={path} />
         </span>
       )}
-      <Dialog onOpenChange={setFull} open={full}>
-        <DialogContent
-          className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/80 bg-terminal p-0 sm:h-[90vh] sm:w-[min(64rem,calc(100vw-4rem))] sm:max-w-none sm:rounded-lg"
-          // Focus the viewer, not its first button: a ring on Copy reads as a selection.
-          onOpenAutoFocus={(event) => event.preventDefault()}
-          showCloseButton={false}
-        >
-          <span className="flex items-center gap-1 border-b border-border/60 py-1.5 pr-1.5 pl-3">
-            <span className="min-w-0 flex-1">
-              <DialogTitle className="truncate text-[13px] leading-5 font-normal text-foreground/90">
-                {name}
-              </DialogTitle>
-              <span className="block truncate font-mono text-[11px] leading-4 text-muted-foreground">
-                {note} · {elidePath(shortenPath(path, { home }), 60)}
-              </span>
-            </span>
-            {actions}
-            <IconButton label="Close" onClick={() => setFull(false)}>
-              <XIcon className="size-4" />
-            </IconButton>
-          </span>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <Contents body={body} loadAll={loadAll} path={path} />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TextDialog onOpenChange={setFull} onRead={onRead} open={full} path={path} />
     </span>
+  )
+}
+
+/**
+ * The full-screen viewer of a text file: the card's Full screen, and a path in inline code. It fills a phone's screen
+ * and reads the file each time it opens.
+ */
+export function TextDialog({
+  path,
+  open,
+  onOpenChange,
+  onRead,
+}: {
+  path: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onRead?: (text: Text | undefined) => void
+}) {
+  const { body, loadAll } = useText(path, open, onRead)
+  const home = useSystem()?.machine.home
+  const name = path.split('/').at(-1) ?? path
+  const shown = body?.kind === 'shown' ? body.text : undefined
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent
+        className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/80 bg-terminal p-0 sm:h-[90vh] sm:w-[min(64rem,calc(100vw-4rem))] sm:max-w-none sm:rounded-lg"
+        // Focus the viewer, not its first button: a ring on Copy reads as a selection.
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        showCloseButton={false}
+      >
+        <span className="flex items-center gap-1 border-b border-border/60 py-1.5 pr-1.5 pl-3">
+          <span className="min-w-0 flex-1">
+            <DialogTitle className="truncate text-[13px] leading-5 font-normal text-foreground/90">
+              {name}
+            </DialogTitle>
+            <span className="block truncate font-mono text-[11px] leading-4 text-muted-foreground">
+              {shown && `${meta(shown.size, shown.lines)} · `}
+              {elidePath(shortenPath(path, { home }), 60)}
+            </span>
+          </span>
+          <Actions body={body} path={path} />
+          <IconButton label="Close" onClick={() => onOpenChange(false)}>
+            <XIcon className="size-4" />
+          </IconButton>
+        </span>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Contents body={body} loadAll={loadAll} path={path} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Copy, once the text shows, and Open in Zed on the machine Ultimate runs on. */
+function Actions({ body, path }: { body?: Body; path: string }) {
+  return (
+    <>
+      {body?.kind === 'shown' && <CopyButton text={body.text.text} />}
+      {onHost && (
+        <IconButton label="Open in Zed" onClick={() => edit(path)}>
+          <CodeIcon className="size-4" />
+        </IconButton>
+      )}
+    </>
   )
 }
 

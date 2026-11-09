@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import {
+  existingText,
   readCaptions,
   readChunk,
   readDeck,
@@ -44,8 +45,18 @@ const launch = (editor: string, path: string) =>
   })
 
 // Only the transcript's player and viewer read files; an agent has its own tools for that.
-export const userActions = ['info', 'read', 'deck', 'captions', 'text', 'edit']
+export const userActions = ['info', 'read', 'deck', 'captions', 'text', 'edit', 'exists']
 export const actions = {
+  /**
+   * `{ paths }` → the absolute paths among them that name text files in a project folder, the ones the viewer opens:
+   * one call checks every inline code path a message mentions. At most 500 are checked.
+   */
+  exists: async (args: unknown, { host }: Ctx) => {
+    const { paths } = (args && typeof args === 'object' ? args : {}) as { paths?: unknown }
+    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string'))
+      throw new Error('Expected { paths }')
+    return existingText(paths.slice(0, 500), await rootsOf(await host.projects()))
+  },
   /**
    * `{ path }` → `{ type, size }` of a media file in a project folder, or `{ type: 'text', size, lines? }` of a text
    * file, or why it cannot be shown.

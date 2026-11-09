@@ -28,8 +28,18 @@ What counts as text: an extension for notes, data, logs or source code (md, txt,
 …), or a known name (`Makefile`, `Dockerfile`, `.gitignore`), and no NUL byte in the first 8 KB, git's test for
 binary. `.env` files and other dotfiles stay plain links, since they often hold secrets.
 
-Only Markdown links become cards. A path in inline code (`src/app.ts`) stays text: Ultimate's web SDK has renderers
-for links and fenced code blocks, not for inline code.
+## Paths in inline code
+
+A path in inline code (`src/app.ts`, `~/notes/todo.md`, an absolute path, `src/app.ts:42`) that names a text file
+which exists gets a faint dotted underline and opens the same full-screen viewer on click, tap, or Enter once
+focused. Relative paths count from the shown conversation's folder, `~/` from the home folder; a `:line` is dropped.
+Fenced code blocks stay as they are, and so does every span that is not such a path: it renders exactly as before.
+
+Only spans that look like paths are checked: a text extension or name as above (so `.env` and other dotfiles stay
+out), no spaces, no shell syntax (`*`, `$`, quotes, brackets), and not a URL or an option. The spans of a page ask
+together: they gather for 150 ms, then one `exists` call asks the server about all of them. Each answer counts for
+30 seconds; a span shown again after that asks again, while one already shown keeps its link. When the check fails,
+the spans stay plain code.
 
 ## Keys
 
@@ -51,7 +61,7 @@ so the card refuses files over 150 MB. iPhone Safari cannot play `.webm`, `.ogg`
 
 ## What it serves
 
-The `info`, `read`, `text` and `edit` actions are user-only (the page calls them; agents cannot) and pass Ultimate's
+The `info`, `read`, `text`, `edit` and `exists` actions are user-only (the page calls them; agents cannot) and pass Ultimate's
 admission like every action: same-origin on the loopback page, the owner's Tailscale login over the tailnet. They read a file only
 when all of these hold:
 
@@ -61,7 +71,8 @@ when all of these hold:
   `attachments/` or `worktrees/` under its home;
 - its first bytes look like an audio or video container, or a JPEG or PNG.
 
-`text` and `edit` take text files under the same folder rule, with symlinks resolved and the binary test above. The
+`text` and `edit` take text files under the same folder rule, with symlinks resolved and the binary test above.
+`exists` takes up to 500 absolute paths and returns the ones `text` would open, reading at most 8 KB of each. The
 `captions` action returns the `.vtt` or `.srt` beside a video that passes the same checks, under the same folder
 rule. The `deck` action reads a `deck.json` under the same folder rule and returns its narration and slide paths only when
 they lie inside the deck's own folder.
@@ -84,5 +95,6 @@ node --test media/media.test.ts
 ```
 
 They cover what may be read (project folders only, symlinks resolved, media bytes only), which files count as text and
-the size caps of the text viewer, subtitles beside a video, and how links are spotted. The cards themselves were checked
-on the running host.
+the size caps of the text viewer, subtitles beside a video, how links are spotted, and which inline code spans count
+as paths, how they resolve (relative, `~/`, absolute) and that only text files in project folders open. The cards and
+the inline code links themselves were checked on the running host.

@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   CHUNK_BYTES,
+  existingText,
   readCaptions,
   readChunk,
   readDeck,
@@ -17,7 +18,15 @@ import {
   resolveText,
   rootsOf,
 } from './media.ts'
-import { isText, MAX_TEXT_BYTES, mediaType, TEXT_BYTES, TEXT_LINES } from './types.ts'
+import {
+  isPathCandidate,
+  isText,
+  MAX_TEXT_BYTES,
+  mediaType,
+  resolvePath,
+  TEXT_BYTES,
+  TEXT_LINES,
+} from './types.ts'
 
 const wav = (bytes: number) => {
   const data = Buffer.alloc(bytes)
@@ -157,6 +166,73 @@ test('spots links to text files by path', () => {
   assert.equal(isText('/Users/me/out/take.wav'), false)
   assert.equal(isText('https://example.com/a.md'), false)
   assert.equal(isText('docs/plan.md'), false)
+})
+
+test('spots paths to text files in inline code', () => {
+  for (const code of [
+    'src/app.ts',
+    'README.md',
+    'pnpm-lock.yaml',
+    './docs/plan.md',
+    '../other/notes.txt',
+    '~/notes/todo.md',
+    '/Users/me/my-app/src/app.tsx',
+    'src/app.ts:42',
+    'src/app.ts:42:7',
+    'node_modules/@scope/pkg/index.d.ts',
+    '.github/workflows/ci.yml',
+    'Makefile',
+  ])
+    assert.equal(isPathCandidate(code), true, code)
+  for (const code of [
+    'pnpm check',
+    'git status',
+    'https://example.com/a.md',
+    'file:///Users/me/a.md',
+    '//example.com/a.md',
+    'src/*.ts',
+    '$HOME/a.md',
+    '~other/a.md',
+    '--config=app.json',
+    'src/app',
+    'v1.2.3',
+    '.env',
+    'config/.env.local',
+    '#123',
+    '',
+  ])
+    assert.equal(isPathCandidate(code), false, code)
+})
+
+test('resolves inline code paths against the folder and home', () => {
+  const where = { cwd: '/Users/me/my-app', home: '/Users/me' }
+  assert.equal(resolvePath('src/app.ts', where), '/Users/me/my-app/src/app.ts')
+  assert.equal(resolvePath('./docs/../README.md:3', where), '/Users/me/my-app/README.md')
+  assert.equal(resolvePath('../other/notes.md', where), '/Users/me/other/notes.md')
+  assert.equal(resolvePath('~/notes/todo.md', where), '/Users/me/notes/todo.md')
+  assert.equal(resolvePath('/srv/site/index.html', where), '/srv/site/index.html')
+  assert.equal(resolvePath('pnpm check', where), undefined)
+})
+
+test('opens inline code paths only to text files in project folders', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'media-')))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const project = join(base, 'my-app')
+  await mkdir(join(project, 'src'), { recursive: true })
+  await writeFile(join(project, 'src', 'app.ts'), 'export {}\n')
+  await writeFile(join(project, 'README.md'), '# App\n')
+  await writeFile(join(project, 'blob.ts'), Buffer.from([0x00, 0x01]))
+  await writeFile(join(base, 'outside.md'), '# Not yours\n')
+  await symlink(join(base, 'outside.md'), join(project, 'escape.md'))
+  const where = { cwd: project, home: base }
+  const asked = ['src/app.ts', '~/my-app/README.md', join(project, 'README.md'), 'gone.md']
+    .concat(['blob.ts', '../outside.md', '~/outside.md', 'escape.md'])
+    .map((code) => resolvePath(code, where)!)
+  assert.deepEqual(await existingText(asked, [project]), [
+    join(project, 'src', 'app.ts'),
+    join(project, 'README.md'),
+    join(project, 'README.md'),
+  ])
 })
 
 test('spots links to media files by path', () => {
