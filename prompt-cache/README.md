@@ -3,18 +3,21 @@
 Shows when keep-warm renewed @ultimate's prompt cache, and what cache rebuilds and warms cost across conversations.
 
 Ultimate itself marks each rebuild in the transcript (a "cache rebuilt" line on the turn, with its cause), so this
-extension draws no line of its own for them; it adds the rebuild's cost to that line, the warms and the dollar totals.
+extension draws no extra line for them; it redraws that line with the rebuild's cost, and adds the warms and the dollar
+totals.
 
 ## Requirements
 
-Ultimate with `context`'s `context.cache-rebuilt` point (`extensions/context/ui.tsx`) for the cost on the rebuild
-line; without it the line stays as it is and the rest works. Pi's `collectCacheMisses` comes from the Ultimate clone's
+Ultimate whose `context` renders its cache-rebuilt line through the `context.cache-rebuilt` point
+(`CacheRebuiltLine` in `extensions/context/ui.tsx`, with `<Rendered>`) for the cost on that line; without it the line
+stays as it is and the rest works. Pi's `collectCacheMisses` comes from the Ultimate clone's
 `node_modules`.
 
 ## In the transcript
 
-- **Amber** `… · $1.57` at the end of Ultimate's `cache rebuilt` line: what that reply paid over a cache hit, the same
-  number the chip counts. Its tooltip says how it was priced. Under a cent adds nothing.
+- **Amber** `… · $1.57` at the end of Ultimate's `cache rebuilt` line, which this extension redraws in the same look
+  and words: what that reply paid over a cache hit, the same number the chip counts. Its tooltip says how it was
+  priced. Under a cent keeps Ultimate's own line.
 
 - **Grey** `cache warmed · $0.05` (or `cache warmed 3× · $0.15`): keep-warm pings after that @ultimate reply.
 - **Red** `cache warm failed · <reason>`: a ping failed; keep-warm sends no more until @ultimate's next answer.
@@ -69,12 +72,12 @@ Ultimate picks up each change live; no restart.
 - Actions: `warms { conversation }` → the pings on it; `summary` → the newest miss, this week's misses and pings.
   Counts are cached per conversation until its newest entry changes.
 - The transcript wraps `pi.assistant` with an entry renderer, as `models` marks a model switch, and provides
-  `context.cache-rebuilt` for the cost on the rebuild line (`missCost` and `priced` in `notice.ts`, which the server's
-  count shares); nothing in the clone changes.
+  `context.cache-rebuilt` to redraw the rebuild line with its cost (`missCost` and `priced` in `notice.ts`, which the
+  server's count shares); nothing in the clone changes.
 
 Other extensions are named by string (`keep-warm.state`, `ultimate.standing-agents`, `pi.assistant`,
-`context.cache-rebuilt`). If an
-Ultimate update renames one, check them against the built-ins.
+`context.cache-rebuilt`). If an Ultimate update renames one, check them against the built-ins. The redrawn line
+copies `context`'s look and cause wording (`causes` in `web.tsx`): after an update that changes them, match it again.
 
 ## Tests
 

@@ -1,5 +1,5 @@
 import type { EntryRecord } from '@earendil-works/pi-durable'
-import { FlameIcon, RefreshCwIcon } from 'lucide-react'
+import { DatabaseZapIcon, FlameIcon, RefreshCwIcon } from 'lucide-react'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -11,6 +11,7 @@ import {
   defineWebExtension,
   docRef,
   formatAgo,
+  formatDuration,
   formatTokens,
   provide,
   useAction,
@@ -33,19 +34,59 @@ const WarmsAction = actionRef<{ conversation: number }, Warm[]>('prompt-cache', 
 const SummaryAction = actionRef<null, Summary>('prompt-cache', 'summary')
 const WarmsDoc = docRef<{ warms: Warm[] }>('cache.warms')
 
-/** The parts of a rebuild Ultimate's `context` passes (`CacheBust` in its `lib/context-usage.ts`) that this reads. */
-type Bust = { written: number; read: number; before: number }
-/** `context`'s point that adds parts to its cache-rebuilt line (`CacheRebuiltDetail` in `extensions/context/ui.tsx`). */
-const CacheRebuiltDetail = definePoint<
-  { entry: EntryRecord; bust: Bust },
-  { text: string; title?: string } | undefined
+/** A rebuild as Ultimate's `context` passes it (`CacheBust` in its `lib/context-usage.ts`). */
+type Bust = {
+  written: number
+  read: number
+  before: number
+  gap: number
+  cause: 'system' | 'model' | 'expired' | 'prefix'
+}
+/** `context`'s cache-rebuilt line, which extensions may redraw (`CacheRebuiltLine` in `extensions/context/ui.tsx`). */
+const CacheRebuiltLine = definePoint<
+  { entry: EntryRecord; bust: Bust; core: ReactNode },
+  ReactNode
 >('context.cache-rebuilt')
 
+/** Why the cache was rebuilt, worded as `context` words it. */
+const causes: Record<Bust['cause'], (bust: Bust) => string> = {
+  system: () => 'after the system prompt change',
+  model: () => 'after a model switch',
+  expired: (bust) => `expired after ${formatDuration(bust.gap)} idle`,
+  prefix: () => 'earlier context changed',
+}
+
 /**
- * What the rebuild cost over a cache hit, for the end of Ultimate's cache-rebuilt line: the tokens it wrote again that
- * the prompt before already held, priced as the chip prices misses. Under a cent says nothing.
+ * Ultimate's cache-rebuilt line, redrawn with what the rebuild cost at its end, never cut off. It keeps `context`'s
+ * look; a rebuild under a cent keeps `context`'s own line.
  */
-function useRebuildCost({ entry, bust }: { entry: EntryRecord; bust: Bust }) {
+function useCostLine({ entry, bust, core }: { entry: EntryRecord; bust: Bust; core: ReactNode }) {
+  const cost = useRebuildCost(entry, bust)
+  if (!cost) return core
+  return (
+    <div
+      className="flex items-center gap-3 font-mono text-[11px] text-warning/80 before:h-px before:flex-1 before:bg-warning/25 after:h-px after:flex-1 after:bg-warning/25"
+      data-cache-rebuilt={entry.id}
+    >
+      <span className="flex max-w-[85%] min-w-0 items-center gap-1.5">
+        <DatabaseZapIcon className="size-3 shrink-0" />
+        <span className="truncate">
+          cache rebuilt · {formatTokens(bust.written)} written · {formatTokens(bust.read)} of{' '}
+          {formatTokens(bust.before)} read · {causes[bust.cause](bust)}
+        </span>
+        <span className="shrink-0 tabular-nums" data-cache-cost title={cost.title}>
+          · {cost.text}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+/**
+ * What the rebuild cost over a cache hit: the tokens it wrote again that the prompt before already held, priced as the
+ * chip prices misses. Under a cent says nothing.
+ */
+function useRebuildCost(entry: EntryRecord, bust: Bust) {
   const models = useModels()
   const message = entry.model?.[0] as
     | { role: string; provider: string; model: string; usage: Usage }
@@ -259,6 +300,6 @@ function Chip() {
 
 export default defineWebExtension({
   entries: { 'pi.assistant': Reply },
-  provides: [provide(CacheRebuiltDetail, useRebuildCost)],
+  provides: [provide(CacheRebuiltLine, useCostLine)],
   slots: { 'statusline.right': [{ component: Chip, order: -1 }] },
 })
