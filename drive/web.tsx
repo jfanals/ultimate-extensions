@@ -30,7 +30,6 @@ import type { Utterance } from './speech.ts'
 
 /** How often the shown screen restarts the speech engines' idle clocks. */
 const KEEP_WARM_MS = 60_000
-/** Recordings stop on their own here, well inside what transcription takes. */
 // This screen's actions (server.ts), and the other extensions' documents and actions it uses, by name.
 /** No arguments → `{ voice }`: starts both speech engines (or restarts their idle clocks), so neither starts cold. */
 const WarmAction = actionRef<null, { voice: string }>('drive', 'warm')
@@ -51,7 +50,13 @@ const MessagesDoc = docRef<Board>('board')
 /** Each standing agent's conversation by name (subagents' `ultimate.standing-agents`). */
 const StandingDoc = docRef<Record<string, number>>('ultimate.standing-agents')
 
-const MAX_MS = 2 * 60_000
+/** Opus at 24 kbps keeps speech clear for transcription; browsers default to 128 kbps, which fills `MAX_BYTES` in 8 minutes. */
+const BITS_PER_SECOND = 24_000
+/**
+ * A recording is sent on its own once it reaches this size, about 40 minutes at `BITS_PER_SECOND`: under voice's 8 MiB
+ * `MAX_AUDIO_BYTES`, and base64'd under the 12 MB action request. A spoken warning comes a minute before.
+ */
+const MAX_BYTES = 7_500_000
 const TYPES = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm']
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'
@@ -238,7 +243,11 @@ type Recording = {
   cancelled: boolean
   /** The question heard when recording began: what this recording answers. */
   re?: number
+  /** Whether the minute-left warning was said. */
+  warned: boolean
 }
+/** A recording whose sending failed, kept so Try again sends it without speaking again; `text` once transcribed. */
+type Failed = { audio: Blob; re?: number; text?: string }
 
 /** A soft red halo behind the button that swells with the microphone level, so speaking visibly registers. */
 function LevelHalo({ stream }: { stream: MediaStream }) {
@@ -277,13 +286,14 @@ function LevelHalo({ stream }: { stream: MediaStream }) {
   )
 }
 
-/** Time since this mounted, as m:ss: how long the current recording runs. */
-function Elapsed() {
+/** Time since this mounted, as m:ss: how long the current recording runs; `warned` adds that a minute is left. */
+function Elapsed({ warned }: { warned: boolean }) {
   const [started] = useState(Date.now)
   const seconds = Math.max(0, Math.floor((useNow(500) - started) / 1000))
   return (
     <span className="tabular-nums">
       {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+      {warned && <span className="text-warning"> · 1 min left</span>}
     </span>
   )
 }
@@ -307,6 +317,8 @@ function DriveScreen({ main }: { main: number }) {
   player.current ??= createPlayer(setSpeaking)
   const active = useRef<Recording>(undefined)
   const [recording, setRecording] = useState(false)
+  const [warned, setWarned] = useState(false)
+  const [failed, setFailed] = useState<Failed>()
   const [transcribing, setTranscribing] = useState(false)
   const [asked, setAsked] = useState(false)
   const [error, setError] = useState<string>()
@@ -373,14 +385,21 @@ function DriveScreen({ main }: { main: number }) {
     for (const utterance of waiting.current.splice(0)) play(utterance)
   }
 
-  async function send(audio: Blob, re: number | undefined) {
+  /** Say a short notice; it is not kept for Replay. */
+  const notice = (text: string) => {
+    // oxlint-disable-next-line typescript/no-floating-promises -- failures show on screen.
+    void player.current!.say(text).catch((failure: unknown) => setError(errorMessage(failure)))
+  }
+
+  async function send(audio: Blob, re: number | undefined, transcribed?: string) {
     setTranscribing(true)
     setError(undefined)
+    setFailed(undefined)
+    let text = transcribed
     try {
-      const { text } = await api.action(TranscribeAction, {
-        audio: await base64(audio),
-        mimeType: audio.type,
-      })
+      text ??= (
+        await api.action(TranscribeAction, { audio: await base64(audio), mimeType: audio.type })
+      ).text
       if (!text) {
         setError('No speech heard')
         return
@@ -390,7 +409,10 @@ function DriveScreen({ main }: { main: number }) {
       if (re !== undefined) setQuestion((current) => (current === re ? undefined : current))
       setAsked(true)
     } catch (failure) {
+      // Nothing said is lost: the recording (or its text) waits for Try again.
+      setFailed({ audio, re, text })
       setError(errorMessage(failure))
+      notice('That did not go through. Tap Try again to send it.')
     } finally {
       setTranscribing(false)
     }
@@ -424,11 +446,29 @@ function DriveScreen({ main }: { main: number }) {
       return
     }
     const type = TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate))
-    const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined)
-    const taking: Recording = { recorder, stream, cancelled: false, re }
+    const recorder = new MediaRecorder(stream, {
+      audioBitsPerSecond: BITS_PER_SECOND,
+      ...(type ? { mimeType: type } : {}),
+    })
+    const taking: Recording = { recorder, stream, cancelled: false, re, warned: false }
     const chunks: Blob[] = []
+    const began = Date.now()
+    let bytes = 0
     recorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size > 0) chunks.push(event.data)
+      if (event.data.size === 0) return
+      chunks.push(event.data)
+      bytes += event.data.size
+      if (active.current !== taking) return
+      // Time left until MAX_BYTES at the rate recorded so far: the browser may not honour BITS_PER_SECOND.
+      const left = ((MAX_BYTES - bytes) / bytes) * (Date.now() - began)
+      if (left <= 0) {
+        finish(false)
+        notice('That is the limit, so I sent it.')
+      } else if (left <= 60_000 && !taking.warned) {
+        taking.warned = true
+        setWarned(true)
+        notice('One minute left.')
+      }
     })
     recorder.addEventListener('stop', () => {
       for (const track of stream.getTracks()) track.stop()
@@ -438,6 +478,7 @@ function DriveScreen({ main }: { main: number }) {
     })
     recorder.start(1000)
     active.current = taking
+    setWarned(false)
     setRecording(true)
   }
 
@@ -450,11 +491,6 @@ function DriveScreen({ main }: { main: number }) {
     setRecording(false)
   }
 
-  useEffect(() => {
-    if (!recording) return undefined
-    const timer = setTimeout(() => finish(false), MAX_MS)
-    return () => clearTimeout(timer)
-  }, [recording])
   // Leaving the screen drops a recording and the speech.
   useEffect(() => {
     gone.current = false
@@ -488,6 +524,11 @@ function DriveScreen({ main }: { main: number }) {
     if (waiting.current.length) return drain()
     player.current!.stop()
     if (last) play(last)
+  }
+  const retry = async () => {
+    await player.current!.unlock()
+    player.current!.stop()
+    if (failed) await send(failed.audio, failed.re, failed.text)
   }
 
   const phase: Phase = recording
@@ -540,7 +581,7 @@ function DriveScreen({ main }: { main: number }) {
             </p>
           ) : phase === 'listening' ? (
             <p className="text-muted-foreground">
-              <Elapsed />
+              <Elapsed warned={warned} />
             </p>
           ) : asking ? (
             <p className="flex items-center gap-1 rounded-full bg-warning/15 py-1 pr-1 pl-4 text-lg whitespace-nowrap text-warning">
@@ -591,6 +632,15 @@ function DriveScreen({ main }: { main: number }) {
       </div>
 
       <nav className="flex w-full max-w-md flex-col gap-3 landscape:col-start-2 landscape:row-start-2 landscape:self-start">
+        {failed && !recording && !transcribing && (
+          <button
+            className="flex h-16 items-center justify-center gap-3 rounded-2xl bg-error/20 text-xl font-medium text-error active:bg-error/30"
+            onClick={() => void retry()}
+            type="button"
+          >
+            <RotateCcwIcon className="size-7" /> Try again
+          </button>
+        )}
         {locked && (
           <button
             className="flex h-16 items-center justify-center gap-3 rounded-2xl bg-brand/20 text-xl font-medium text-brand active:bg-brand/30"

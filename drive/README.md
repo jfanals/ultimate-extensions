@@ -21,6 +21,10 @@ happening: listening, transcribing, thinking, speaking. **Replay** reads the las
 The screen keeps itself on (Wake Lock) while shown. Browsers play audio only after a tap: the first tap on the talk
 button unlocks it, and anything that arrives before then shows **Tap to hear it**.
 
+Talk for as long as you need: a recording is sent on its own only at about 40 minutes (7.5 MB at 24 kbps, what one
+transcription takes), and a voice says "One minute left" before that. If sending fails, the screen says so aloud and
+keeps the recording: **Try again** sends it without speaking again.
+
 While the screen is open it reads aloud what is new for the user:
 
 - @ultimate's final answers;
@@ -57,7 +61,10 @@ Ultimate picks up each change live; no restart.
 ## How it works
 
 - **Speech in** reuses voice's `transcribe` action, so `voice.transcriptionUrl` (speech's Parakeet) or the OpenAI key
-  applies as it does for the composer.
+  applies as it does for the composer. The browser records Opus at 24 kbps (browsers default to 128 kbps, which
+  would reach voice's 8 MiB limit in 8 minutes) and sends the whole recording in one action at the end. Speech's
+  Parakeet transcribes long audio in 2-minute chunks: 30 minutes take about 45 s. OpenAI's transcription caps a
+  recording at 25 MB and voice's request at 65 s, so long recordings need the local path.
 - **To @ultimate:** the `ask` action submits a `drive.spoken` input that steers a busy @ultimate. Its model text asks
   for a short, plain spoken answer (`SPOKEN` in `server.ts`), so no system-prompt section changes and the prompt cache
   stays warm; the transcript shows only what was said, marked "spoken". With `re`, `ask` answers that open message

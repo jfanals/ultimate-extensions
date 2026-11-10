@@ -8,8 +8,11 @@ import { localTranscribe, transcriptionUrl } from './local.ts'
 
 export default upstream
 export const MAX_AUDIO_BYTES = builtin.MAX_AUDIO_BYTES
-/** Upstream's limit for one transcription. */
-const TIMEOUT_MS = 65_000
+/**
+ * The limit for one local transcription. Upstream allows 65 s, but Drive sends recordings of up to 40 minutes: 30 took
+ * Parakeet 44 s from a cold start.
+ */
+const TIMEOUT_MS = 180_000
 
 /** OpenAI's key is declared only when voice needs it, so the Secrets panel and the setup check ask for it only then. */
 export const secrets = async (host: { userHome: string }) =>

@@ -78,7 +78,10 @@ Ultimate picks up each change live; no restart.
   Parakeet in about a second, Kokoro in about ten); it stays warm and is killed `speech.idleMinutes` after its last
   answer. Nothing starts at login or with Ultimate.
 - **Speech to text** is served as OpenAI's `POST /v1/audio/transcriptions` on `127.0.0.1:<speech.port>`. The audio
-  (WebM/Opus from browsers, MP4 on iOS) goes to Parakeet as a temporary file, which it decodes with ffmpeg.
+  (WebM/Opus from browsers, MP4 on iOS) goes to Parakeet as a temporary file, which it decodes with ffmpeg. Audio
+  longer than 2 minutes is transcribed in 2-minute chunks overlapped by 15 s, which parakeet-mlx merges: in one
+  piece, 19 minutes peaked at 34.5 GB and 30 minutes killed the worker; chunked, 19 minutes take 27 s and 3.4 GB,
+  30 minutes about 45 s.
 - **Text to speech** is the `speech` service, `speak(text, voice)`; drive calls it with `host.need({ name: 'speech' })`.
   The voice picks the engine: `woof:juno` or `woof:mira` is Underdog Woof (24 kHz, reads numbers, times and codes as
   spoken, same take for the same text), any other name a Kokoro voice (`af_heart`, `ef_dora`, …).

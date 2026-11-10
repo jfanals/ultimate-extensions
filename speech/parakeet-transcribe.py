@@ -6,6 +6,10 @@ import json, os, sys
 out = os.fdopen(os.dup(1), "wb")
 os.dup2(2, 1)  # libraries that print must not corrupt the protocol
 MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
+# Long recordings go in 2-minute chunks, overlapped by 15 s and merged by parakeet-mlx: in one piece, attention over
+# 19 minutes of speech peaked at 34.5 GB and 30 minutes killed the worker; chunked, 19 minutes takes 3.4 GB and half
+# the time. Shorter audio is transcribed whole either way.
+CHUNK = {"chunk_duration": 120.0, "overlap_duration": 15.0}
 try:
     import mlx.core as mx
     # MLX keeps freed buffers for reuse; uncapped that is 2.7 GB on top of the 1.2 GB model, for ~0.1 s per request.
@@ -29,7 +33,7 @@ for line in sys.stdin:
         request = json.loads(line)
         if model is None:
             model = from_pretrained(MODEL)
-        text = model.transcribe(request["path"]).text.strip().encode() if request.get("path") else b""
+        text = model.transcribe(request["path"], **CHUNK).text.strip().encode() if request.get("path") else b""
         reply({"bytes": len(text)}, text)
     except Exception as error:
         reply({"error": str(error)})
