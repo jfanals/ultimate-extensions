@@ -1,8 +1,10 @@
 import type { EntryRecord } from '@earendil-works/pi-durable'
 import {
+  BellIcon,
   CarFrontIcon,
   LoaderCircleIcon,
   MicIcon,
+  PauseIcon,
   RotateCcwIcon,
   SendIcon,
   SquareIcon,
@@ -25,7 +27,7 @@ import {
   UserView,
 } from '@/sdk'
 import type { Board } from './types.ts'
-import { entrySpeech, messageSpeech, sentences } from './speech.ts'
+import { entrySpeech, messageSpeech, plain, sentences } from './speech.ts'
 import type { Utterance } from './speech.ts'
 
 /** How often the shown screen restarts the speech engines' idle clocks. */
@@ -35,11 +37,28 @@ const KEEP_WARM_MS = 60_000
 const WarmAction = actionRef<null, { voice: string }>('drive', 'warm')
 /** `{ text }` (at most 2000 characters) → `{ audio }`: base64 24 kHz WAV of it in `drive.voice`. */
 const SpeakAction = actionRef<{ text: string }, { audio: string }>('drive', 'speak')
-/** `{ text, re? }` → `{ conversation }` or `{ answered }`: a spoken input to @ultimate, or the reply to message `re`. */
+/**
+ * `{ text, re?, project? }` → `{ conversation }` or `{ answered }`: a spoken input to @ultimate, or the reply to message
+ * `re`; with `project`, in that project's instance.
+ */
 const AskAction = actionRef<
-  { text: string; re?: number },
+  { text: string; re?: number; project?: string },
   { conversation: number } | { answered: number }
 >('drive', 'ask')
+/** `{ project, message }` → `{ text }`: another project's open message as it is read aloud. */
+const QuestionAction = actionRef<{ project: string; message: number }, { text: string }>(
+  'drive',
+  'question',
+)
+/** The projects extension's `overview`: every project's state and the messages waiting on the user (`projects/model.ts`). */
+const OverviewAction = actionRef<
+  null,
+  {
+    rows: { name: string; current: boolean; waiting: { message: number; text: string }[] }[]
+  }
+>('projects', 'overview')
+/** How often the shown screen looks for other projects' new questions. */
+const OTHERS_MS = 20_000
 /** voice's `transcribe`: `{ audio, mimeType }` (base64) → `{ text }`, through `voice.transcriptionUrl` or OpenAI. */
 const TranscribeAction = actionRef<{ audio: string; mimeType: string }, { text: string }>(
   'voice',
@@ -59,10 +78,11 @@ const BITS_PER_SECOND = 24_000
 const MAX_BYTES = 7_500_000
 const TYPES = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm']
 
-type Phase = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'
+type Phase = 'idle' | 'listening' | 'paused' | 'transcribing' | 'thinking' | 'speaking'
 const WORDS: Record<Phase, string> = {
   idle: 'Tap to talk',
   listening: 'Listening',
+  paused: 'Paused',
   transcribing: 'Transcribing',
   thinking: 'Thinking',
   speaking: 'Speaking',
@@ -71,6 +91,7 @@ const WORDS: Record<Phase, string> = {
 const TAP: Record<Phase, string> = {
   idle: 'Talk',
   listening: 'Send',
+  paused: 'Send',
   transcribing: 'Wait',
   thinking: 'Talk',
   speaking: 'Talk',
@@ -118,6 +139,25 @@ function createPlayer(onChange: (speaking: boolean) => void) {
       audio ??= new AudioContext()
       // A failed resume leaves it suspended; `unlocked` says so and the screen asks for another tap.
       await audio.resume().catch(() => undefined)
+    },
+    /** Two soft rising notes, at once and past the speech queue: something new waits. */
+    chime() {
+      if (!audio) return
+      for (const [at, frequency] of [
+        [0, 660],
+        [0.16, 880],
+      ]) {
+        const tone = audio.createOscillator()
+        const gain = audio.createGain()
+        const start = audio.currentTime + at
+        tone.frequency.value = frequency
+        gain.gain.setValueAtTime(0, start)
+        gain.gain.linearRampToValueAtTime(0.2, start + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3)
+        tone.connect(gain).connect(audio.destination)
+        tone.start(start)
+        tone.stop(start + 0.3)
+      }
     },
     /**
      * Speak `text` after whatever is playing; `started` runs once its first sentence plays. Resolves when it is said, rejects
@@ -237,17 +277,78 @@ function useNews(main: number, say: (utterance: Utterance) => void) {
   }, [entries, loading, messages, main, titles])
 }
 
+/**
+ * Other projects' new questions to the user, read aloud with the project's name, from the projects extension's overview
+ * (nothing without it). Returns the ones still open there, as `project:message`.
+ */
+function useOtherQuestions(say: (utterance: Utterance) => void) {
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const speak = useRef(say)
+  speak.current = say
+  useEffect(() => {
+    let seen: Set<string> | undefined
+    let gone = false
+    const look = async () => {
+      // Without the projects extension there is nothing to hear; a failed poll is asked again next time.
+      const overview = await api.action(OverviewAction).catch(() => undefined)
+      if (!overview || gone) return
+      const waiting = overview.rows
+        .filter((row) => !row.current)
+        .flatMap((row) =>
+          row.waiting.map((w) => ({ ...w, project: row.name, key: `${row.name}:${w.message}` })),
+        )
+      setOpen(new Set(waiting.map((w) => w.key)))
+      // The first look only marks where "new" starts, as in useNews.
+      const fresh = seen ? waiting.filter((w) => !seen!.has(w.key)) : []
+      seen = new Set([...(seen ?? []), ...waiting.map((w) => w.key)])
+      for (const { project, message, text, key } of fresh) {
+        const question = await api
+          .action(QuestionAction, { project, message })
+          // Its full questions could not be read: its gist still says what waits.
+          .catch(() => ({ text: `${project} says: ${plain(text)}` }))
+        if (gone) return
+        speak.current({
+          key: `remote:${key}`,
+          text: `${question.text} Your reply goes to ${project}.`,
+          question: message,
+          project,
+        })
+      }
+    }
+    // oxlint-disable-next-line typescript/no-floating-promises -- look catches its own failures.
+    void look()
+    const timer = setInterval(() => {
+      // oxlint-disable-next-line typescript/no-floating-promises -- look catches its own failures.
+      if (document.visibilityState === 'visible') void look()
+    }, OTHERS_MS)
+    return () => {
+      gone = true
+      clearInterval(timer)
+    }
+  }, [])
+  return open
+}
+
+/** The open message a recording answers, in `project`'s instance when it is another project's. */
+type Target = { re: number; project?: string }
 type Recording = {
   recorder: MediaRecorder
   stream: MediaStream
   cancelled: boolean
   /** The question heard when recording began: what this recording answers. */
-  re?: number
+  target?: Target
   /** Whether the minute-left warning was said. */
   warned: boolean
+  began: number
+  /** Set while paused to listen; `pausedMs` sums the pauses before. */
+  pausedAt?: number
+  pausedMs: number
 }
+/** How long `taking` has recorded, pauses left out. */
+const recorded = (taking: Recording) =>
+  (taking.pausedAt ?? Date.now()) - taking.began - taking.pausedMs
 /** A recording whose sending failed, kept so Try again sends it without speaking again; `text` once transcribed. */
-type Failed = { audio: Blob; re?: number; text?: string }
+type Failed = { audio: Blob; target?: Target; text?: string }
 
 /** A soft red halo behind the button that swells with the microphone level, so speaking visibly registers. */
 function LevelHalo({ stream }: { stream: MediaStream }) {
@@ -286,10 +387,10 @@ function LevelHalo({ stream }: { stream: MediaStream }) {
   )
 }
 
-/** Time since this mounted, as m:ss: how long the current recording runs; `warned` adds that a minute is left. */
-function Elapsed({ warned }: { warned: boolean }) {
-  const [started] = useState(Date.now)
-  const seconds = Math.max(0, Math.floor((useNow(500) - started) / 1000))
+/** How long `taking` has recorded, as m:ss; `warned` adds that a minute is left. */
+function Elapsed({ taking, warned }: { taking: Recording; warned: boolean }) {
+  useNow(500)
+  const seconds = Math.max(0, Math.floor(recorded(taking) / 1000))
   return (
     <span className="tabular-nums">
       {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
@@ -317,7 +418,11 @@ function DriveScreen({ main }: { main: number }) {
   player.current ??= createPlayer(setSpeaking)
   const active = useRef<Recording>(undefined)
   const [recording, setRecording] = useState(false)
+  const [paused, setPaused] = useState(false)
   const [warned, setWarned] = useState(false)
+  /** News that came while the user spoke, held until they listen or the recording ends. */
+  const held = useRef<Utterance[]>([])
+  const [heldCount, setHeldCount] = useState(0)
   const [failed, setFailed] = useState<Failed>()
   const [transcribing, setTranscribing] = useState(false)
   const [asked, setAsked] = useState(false)
@@ -325,14 +430,9 @@ function DriveScreen({ main }: { main: number }) {
   const [heard, setHeard] = useState<string>()
   const [last, setLast] = useState<Utterance>()
   const [locked, setLocked] = useState(false)
-  const [question, setQuestion] = useState<number>()
+  const [question, setQuestion] = useState<Target>()
   const [voice, setVoice] = useState<string>()
   const messages = useDocOf(1, MessagesDoc)?.messages
-  const openQuestion =
-    question !== undefined &&
-    messages?.some((m) => m.id === question && m.state === 'delivered' && m.reply)
-      ? question
-      : undefined
 
   // Both engines take seconds to load cold: start them as the screen opens, and keep them warm while it is shown.
   const warm = () => {
@@ -364,14 +464,24 @@ function DriveScreen({ main }: { main: number }) {
     void player
       .current!.say(utterance.text, () => {
         // A spoken answer goes to the question the user has heard, not one still queued behind it.
-        if (utterance.question !== undefined) setQuestion(utterance.question)
+        if (utterance.question !== undefined)
+          setQuestion({
+            re: utterance.question,
+            ...(utterance.project ? { project: utterance.project } : {}),
+          })
       })
       .catch((failure: unknown) => setError(errorMessage(failure)))
   }
   const say = (utterance: Utterance) => {
     setAsked(false)
     setError(undefined)
-    if (player.current!.unlocked) play(utterance)
+    const taking = active.current
+    // Never spoken over the user: a chime now, the news when they listen or stop.
+    if (taking && taking.pausedAt === undefined) {
+      held.current.push(utterance)
+      setHeldCount(held.current.length)
+      player.current!.chime()
+    } else if (player.current!.unlocked) play(utterance)
     else {
       waiting.current.push(utterance)
       setLast(utterance)
@@ -379,6 +489,19 @@ function DriveScreen({ main }: { main: number }) {
     }
   }
   useNews(main, say)
+  const openElsewhere = useOtherQuestions(say)
+  const openQuestion =
+    question &&
+    (question.project
+      ? openElsewhere.has(`${question.project}:${question.re}`)
+      : messages?.some((m) => m.id === question.re && m.state === 'delivered' && m.reply))
+      ? question
+      : undefined
+  /** Play the news held while the user spoke. */
+  const hear = () => {
+    setHeldCount(0)
+    for (const utterance of held.current.splice(0)) play(utterance)
+  }
   /** After a tap unlocked audio: play everything that waited for it. */
   const drain = () => {
     setLocked(false)
@@ -391,7 +514,7 @@ function DriveScreen({ main }: { main: number }) {
     void player.current!.say(text).catch((failure: unknown) => setError(errorMessage(failure)))
   }
 
-  async function send(audio: Blob, re: number | undefined, transcribed?: string) {
+  async function send(audio: Blob, target: Target | undefined, transcribed?: string) {
     setTranscribing(true)
     setError(undefined)
     setFailed(undefined)
@@ -405,12 +528,12 @@ function DriveScreen({ main }: { main: number }) {
         return
       }
       setHeard(text)
-      await api.action(AskAction, re !== undefined ? { text, re } : { text })
-      if (re !== undefined) setQuestion((current) => (current === re ? undefined : current))
+      await api.action(AskAction, { text, ...target })
+      if (target) setQuestion((current) => (current === target ? undefined : current))
       setAsked(true)
     } catch (failure) {
       // Nothing said is lost: the recording (or its text) waits for Try again.
-      setFailed({ audio, re, text })
+      setFailed({ audio, target, text })
       setError(errorMessage(failure))
       notice('That did not go through. Tap Try again to send it.')
     } finally {
@@ -424,7 +547,7 @@ function DriveScreen({ main }: { main: number }) {
   async function start() {
     if (starting.current) return
     starting.current = true
-    const re = openQuestion
+    const target = openQuestion
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -450,9 +573,16 @@ function DriveScreen({ main }: { main: number }) {
       audioBitsPerSecond: BITS_PER_SECOND,
       ...(type ? { mimeType: type } : {}),
     })
-    const taking: Recording = { recorder, stream, cancelled: false, re, warned: false }
+    const taking: Recording = {
+      recorder,
+      stream,
+      cancelled: false,
+      target,
+      warned: false,
+      began: Date.now(),
+      pausedMs: 0,
+    }
     const chunks: Blob[] = []
-    const began = Date.now()
     let bytes = 0
     recorder.addEventListener('dataavailable', (event) => {
       if (event.data.size === 0) return
@@ -460,7 +590,7 @@ function DriveScreen({ main }: { main: number }) {
       bytes += event.data.size
       if (active.current !== taking) return
       // Time left until MAX_BYTES at the rate recorded so far: the browser may not honour BITS_PER_SECOND.
-      const left = ((MAX_BYTES - bytes) / bytes) * (Date.now() - began)
+      const left = ((MAX_BYTES - bytes) / bytes) * recorded(taking)
       if (left <= 0) {
         finish(false)
         notice('That is the limit, so I sent it.')
@@ -474,7 +604,7 @@ function DriveScreen({ main }: { main: number }) {
       for (const track of stream.getTracks()) track.stop()
       if (taking.cancelled || !chunks.length) return
       // oxlint-disable-next-line typescript/no-floating-promises -- send shows its own failures on screen.
-      void send(new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' }), taking.re)
+      void send(new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' }), taking.target)
     })
     recorder.start(1000)
     active.current = taking
@@ -489,6 +619,34 @@ function DriveScreen({ main }: { main: number }) {
     taking.cancelled = cancel
     if (taking.recorder.state !== 'inactive') taking.recorder.stop()
     setRecording(false)
+    setPaused(false)
+    // Sent or dropped, the user is free to hear what came meanwhile.
+    if (!gone.current) hear()
+  }
+
+  /** Listen first: pause the recording and play the held news; the recording goes on or is sent after. */
+  async function listen() {
+    await player.current!.unlock()
+    const taking = active.current
+    if (!taking || taking.pausedAt !== undefined) return
+    taking.recorder.pause()
+    taking.pausedAt = Date.now()
+    setPaused(true)
+    hear()
+  }
+  /** Keep talking: stop the news and record on into the same recording. */
+  function resume() {
+    const taking = active.current
+    if (!taking || taking.pausedAt === undefined) return
+    player.current!.stop()
+    taking.pausedMs += Date.now() - taking.pausedAt
+    taking.pausedAt = undefined
+    taking.recorder.resume()
+    setPaused(false)
+  }
+  function discard() {
+    notice('Discarded.')
+    finish(true)
   }
 
   // Leaving the screen drops a recording and the speech.
@@ -528,11 +686,13 @@ function DriveScreen({ main }: { main: number }) {
   const retry = async () => {
     await player.current!.unlock()
     player.current!.stop()
-    if (failed) await send(failed.audio, failed.re, failed.text)
+    if (failed) await send(failed.audio, failed.target, failed.text)
   }
 
   const phase: Phase = recording
-    ? 'listening'
+    ? paused
+      ? 'paused'
+      : 'listening'
     : transcribing
       ? 'transcribing'
       : speaking
@@ -541,8 +701,13 @@ function DriveScreen({ main }: { main: number }) {
           ? 'thinking'
           : 'idle'
 
-  const stream = recording ? active.current?.stream : undefined
+  const taking = recording ? active.current : undefined
+  const stream = phase === 'listening' ? taking?.stream : undefined
   const asking = openQuestion !== undefined && !recording
+  const heldFrom = held.current.at(-1)?.project
+  /** One of the big buttons under the talk button. */
+  const big =
+    'flex h-20 flex-1 items-center justify-center gap-3 rounded-2xl bg-muted/60 text-xl font-medium active:bg-muted disabled:opacity-30 landscape:h-16'
 
   const tap = asking ? 'Answer' : TAP[phase]
 
@@ -558,6 +723,7 @@ function DriveScreen({ main }: { main: number }) {
           className={cn(
             'flex items-center gap-3 text-5xl font-semibold tracking-tight',
             phase === 'listening' && 'text-error',
+            phase === 'paused' && 'text-warning',
             phase === 'speaking' && 'text-brand',
             phase === 'idle' && 'text-muted-foreground',
           )}
@@ -566,6 +732,7 @@ function DriveScreen({ main }: { main: number }) {
             <span className="size-4 shrink-0 rounded-full bg-error motion-safe:animate-pulse" />
           )}
           {phase === 'speaking' && <Volume2Icon className="size-10 shrink-0" />}
+          {phase === 'paused' && <PauseIcon className="size-10 shrink-0 fill-current" />}
           <span>
             {WORDS[phase]}
             {(phase === 'thinking' || phase === 'transcribing') && (
@@ -579,13 +746,20 @@ function DriveScreen({ main }: { main: number }) {
             <p className="line-clamp-2 text-error" role="alert">
               {error}
             </p>
-          ) : phase === 'listening' ? (
-            <p className="text-muted-foreground">
-              <Elapsed warned={warned} />
-            </p>
+          ) : taking ? (
+            <div className="flex flex-col items-center gap-1 text-muted-foreground">
+              <Elapsed taking={taking} warned={warned} />
+              {heldCount > 0 && (
+                <p className="flex items-center gap-2 text-brand">
+                  <BellIcon className="size-5" />
+                  {heldCount === 1 ? 'New message' : `${heldCount} new messages`}
+                  {heldFrom && ` · ${heldFrom}`}
+                </p>
+              )}
+            </div>
           ) : asking ? (
             <p className="flex items-center gap-1 rounded-full bg-warning/15 py-1 pr-1 pl-4 text-lg whitespace-nowrap text-warning">
-              Your answer goes to the question
+              Your answer goes to {openQuestion.project ?? 'the question'}
               <button
                 aria-label="Talk normally instead"
                 className="grid size-10 shrink-0 place-items-center rounded-full text-warning/80 active:bg-warning/20"
@@ -609,7 +783,9 @@ function DriveScreen({ main }: { main: number }) {
             'relative grid size-full place-items-center rounded-full border-4 transition-colors duration-200',
             phase === 'listening'
               ? 'border-error bg-error text-background'
-              : phase === 'speaking'
+              : phase === 'paused'
+                ? 'border-warning bg-warning text-background'
+                : phase === 'speaking'
                 ? 'border-brand/60 bg-muted/40 text-foreground active:bg-muted'
                 : 'border-border bg-muted/40 text-foreground active:bg-muted',
             phase === 'transcribing' && 'text-muted-foreground',
@@ -619,7 +795,7 @@ function DriveScreen({ main }: { main: number }) {
           type="button"
         >
           <span className="flex flex-col items-center gap-2">
-            {phase === 'listening' ? (
+            {recording ? (
               <SendIcon className="size-20" />
             ) : phase === 'transcribing' ? (
               <LoaderCircleIcon className="size-20 motion-safe:animate-spin" />
@@ -650,24 +826,41 @@ function DriveScreen({ main }: { main: number }) {
             <Volume2Icon className="size-7" /> Tap to hear it
           </button>
         )}
-        <div className="flex gap-3">
-          <button
-            className="flex h-20 flex-1 items-center justify-center gap-3 rounded-2xl bg-muted/60 text-xl font-medium active:bg-muted disabled:opacity-30 landscape:h-16"
-            disabled={!last || recording}
-            onClick={() => void replay()}
-            type="button"
-          >
-            <RotateCcwIcon className="size-7" /> Replay
-          </button>
-          <button
-            className="flex h-20 flex-1 items-center justify-center gap-3 rounded-2xl bg-muted/60 text-xl font-medium active:bg-muted disabled:opacity-30 landscape:h-16"
-            disabled={!speaking}
-            onClick={() => player.current!.stop()}
-            type="button"
-          >
-            <SquareIcon className="size-6 fill-current" /> Stop
-          </button>
-        </div>
+        {/* While recording: listen to what came, go on after listening, or drop the recording. */}
+        {recording ? (
+          <div className="flex gap-3">
+            {paused ? (
+              <button className={big} onClick={resume} type="button">
+                <MicIcon className="size-7" /> Keep talking
+              </button>
+            ) : heldCount > 0 ? (
+              <button
+                className={cn(big, 'bg-brand/20 text-brand active:bg-brand/30')}
+                onClick={() => void listen()}
+                type="button"
+              >
+                <Volume2Icon className="size-7" /> Listen first
+              </button>
+            ) : null}
+            <button className={big} onClick={discard} type="button">
+              <XIcon className="size-7" /> Discard
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button className={big} disabled={!last} onClick={() => void replay()} type="button">
+              <RotateCcwIcon className="size-7" /> Replay
+            </button>
+            <button
+              className={big}
+              disabled={!speaking}
+              onClick={() => player.current!.stop()}
+              type="button"
+            >
+              <SquareIcon className="size-6 fill-current" /> Stop
+            </button>
+          </div>
+        )}
         {/* Underdog Woof's licence asks apps that use it to show this credit. */}
         {voice?.startsWith('woof:') && (
           <p className="text-center text-xs text-muted-foreground/70">Voice by Underdog Woof</p>

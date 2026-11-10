@@ -30,7 +30,17 @@ While the screen is open it reads aloud what is new for the user:
 - @ultimate's final answers;
 - landings and failed landings (`workspaces.lander-report`) and failed runs (`watchdog.failure`) in its transcript;
 - messages to the user from any conversation, with their questions and numbered options. After a question, the next
-  thing said answers it (the screen says so; ✕ talks normally instead).
+  thing said answers it (the screen says so; ✕ talks normally instead);
+- with the **projects** extension installed, other running projects' new questions to the user, as "tts says: … Your
+  reply goes to tts." The next thing said answers it in that project (the screen says "Your answer goes to tts").
+
+Nothing is read over you while you speak. What arrives then plays a soft chime and shows **New message**, with two
+buttons under the talk button: **Listen first** pauses the recording and plays it, then **Keep talking** records on
+into the same recording, or the big button sends it; **Discard** drops the recording. Whatever is still held plays once
+the recording is sent or discarded.
+
+To talk to another project's @ultimate, name it ("ask RevenueHunt what it is working on"): @ultimate passes your words
+on with `ultimate.tell` and reads the answer back starting with the project's name.
 
 ## Settings
 
@@ -69,6 +79,12 @@ Ultimate picks up each change live; no restart.
   for a short, plain spoken answer (`SPOKEN` in `server.ts`), so no system-prompt section changes and the prompt cache
   stays warm; the transcript shows only what was said, marked "spoken". With `re`, `ask` answers that open message
   instead, as the user's reply.
+- **Other projects:** `ask { text, re?, project? }` with `project` posts to that project's own `drive/ask` (every
+  Ultimate on the machine loads the same user extensions), over loopback with its origin, located by the clone's
+  `lib/remote.ts` as codemode's `{ project }` reads are; the phone only ever talks to this instance.
+  `question { project, message }` reads that project's `board` through its `codemode/read` and returns the message as
+  it is read aloud. The screen polls the projects extension's `overview` every 20 s while shown for new questions.
+  Talking to another project's @ultimate goes through this one: `SPOKEN` asks it to relay with `ultimate.tell`.
 - **Speech out:** `speak { text }` returns a WAV from speech's worker for `drive.voice` (the `speech` service), which
   starts on demand and stops after `speech.idleMinutes` idle. The screen calls `warm` as it opens, on each Talk tap (not
   awaited) and every minute while it is visible: it starts Parakeet and the voice's engine and loads their models, or only restarts
@@ -76,9 +92,10 @@ Ultimate picks up each change live; no restart.
   `speech.idleMinutes` countdown applies. The browser splits replies into sentences (`speech.ts`) and fetches the next
   one while the current one plays, so speech starts after the first sentence.
 
-It imports only packages and `@/sdk`, never Ultimate's extension files: other extensions' documents, actions and
-services are named by string (`board`, `ultimate.standing-agents`, `voice/transcribe`, the `messages`, `subagents` and
-`speech` services), with the shapes it reads mirrored in `types.ts`. If an Ultimate update renames one of those, the
+It imports only packages, `@/sdk` and, on the server, the clone's `lib/remote.ts`, never Ultimate's extension files:
+other extensions' documents, actions and services are named by string (`board`, `ultimate.standing-agents`,
+`voice/transcribe`, `projects/overview`, `codemode/read`, the `messages`, `subagents` and `speech` services), with the
+shapes it reads mirrored in `types.ts`. If an Ultimate update renames one of those, the
 screen breaks; check them against the built-ins' `refs.ts` and `api.ts` after an update.
 
 ## Tests

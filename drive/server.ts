@@ -2,10 +2,19 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { BACKGROUND_CONTEXT as context, withAbortSignal } from '@earendil-works/chord/context'
 import { defineExtension } from '@earendil-works/pi-durable'
-import type { Device, MessagesService, SpeechService, SubagentsService } from './types.ts'
+// Another project's instance, as codemode's `{ project }` reads and `ultimate.tell` reach it (`@` is the clone's web/src).
+import { locate, postAction } from '@/../../lib/remote.ts'
+import { messageSpeech } from './speech.ts'
+import type {
+  Board,
+  Device,
+  MessagesService,
+  SpeechService,
+  SubagentsService,
+} from './types.ts'
 
 /** The parts of `ExtensionHost` (`server/extensions.ts`) this facet uses. */
-type Host = {
+type Host = Parameters<typeof locate>[0] & {
   userHome: string
   need<S>(api: { name: string; service?: S }): S
   harness(): {
@@ -24,7 +33,7 @@ const SubagentsApi: { name: 'subagents'; service?: SubagentsService } = { name: 
 const SpeechApi: { name: 'speech'; service?: SpeechService } = { name: 'speech' }
 
 /** What tells @ultimate a spoken input wants a spoken answer; it goes with each input, never in the system prompt. */
-export const SPOKEN = `The user said this aloud on the Drive screen, likely while driving, and will hear your answer read out, not see it. Answer in a few short, plain spoken sentences: no Markdown, lists, tables, code, file paths, links or ids. Lead with the outcome; say anything that waits on them as a short numbered choice they can answer by voice. The transcript may contain mistakes.`
+export const SPOKEN = `The user said this aloud on the Drive screen, likely while driving, and will hear your answer read out, not see it. Answer in a few short, plain spoken sentences: no Markdown, lists, tables, code, file paths, links or ids. Lead with the outcome; say anything that waits on them as a short numbered choice they can answer by voice. If they name another project, pass their words to its @ultimate unchanged with ultimate.tell, and when its answer comes, read it back starting with the project's name. The transcript may contain mistakes.`
 
 /** `{ text }` as @ultimate receives it from the Drive screen. */
 export const spokenContent = (text: string) => `${SPOKEN}\n\nThe user said:\n${text}`
@@ -40,6 +49,14 @@ async function voiceOf(host: Pick<Host, 'userHome'>): Promise<string> {
 }
 
 export default defineExtension({ name: 'drive' })
+
+/** Another project's running instance by name, or undefined for this one. */
+async function remote(host: Host, project: unknown) {
+  if (project === undefined) return undefined
+  if (typeof project !== 'string' || !project) throw new Error('Expected project to be a name')
+  const target = await locate(host, project)
+  return 'current' in target ? undefined : target
+}
 
 export const userActions = ['ask']
 export const actions = {
@@ -66,18 +83,50 @@ export const actions = {
     return { audio: wav.toString('base64') }
   },
   /**
-   * `{ text, re? }`: what the user said, to @ultimate as a spoken input; with `re`, the answer to that open message
-   * (a question read aloud), as the user's reply.
+   * `{ project, message }` → `{ text }`: open message `message` of another project's board as the screen reads it,
+   * with the project's name as its sender.
+   */
+  question: async (args: unknown, { host, signal }: Ctx) => {
+    const { project, message } = (args ?? {}) as { project?: unknown; message?: unknown }
+    const target = await remote(host, project)
+    if (!target) throw new Error('Expected another project')
+    const board = (await postAction(
+      target,
+      'codemode',
+      'read',
+      { op: 'doc', args: ['board', 1] },
+      signal,
+    )) as Board | null
+    const found = board?.messages.find(
+      (m) => m.id === message && m.reply && m.state === 'delivered',
+    )
+    if (!found) throw new Error(`${target.name} has no open message ${String(message)}`)
+    return { text: messageSpeech(found, target.name) }
+  },
+  /**
+   * `{ text, re?, project? }`: what the user said, to @ultimate as a spoken input; with `re`, the answer to that open
+   * message (a question read aloud), as the user's reply. With `project`, all of it happens in that project's instance,
+   * through its own `ask`.
    */
   ask: async (args: unknown, { host, signal, device }: Ctx) => {
     const data = (args && typeof args === 'object' && !Array.isArray(args) ? args : {}) as {
       text?: unknown
       re?: unknown
+      project?: unknown
     }
     const text = typeof data.text === 'string' ? data.text.trim() : ''
     if (!text) throw new Error('Expected { text }')
     if (data.re !== undefined && !(Number.isSafeInteger(data.re) && (data.re as number) > 0))
       throw new Error('Expected re to be a message id')
+    const target = await remote(host, data.project)
+    if (target)
+      return postAction(
+        target,
+        'drive',
+        'ask',
+        data.re === undefined ? { text } : { text, re: data.re as number },
+        signal,
+      )
     const ctx = withAbortSignal(signal, context)
     if (typeof data.re === 'number') {
       await host.need(MessagesApi).answer(data.re, text, ctx, device)

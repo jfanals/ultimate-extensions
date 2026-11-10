@@ -2,8 +2,11 @@
 import type { EntryRecord } from '@earendil-works/pi-durable'
 import type { Failure, Message } from './types.ts'
 
-/** Something to say: `key` keeps it said once; `question` is the open message a spoken answer replies to. */
-export type Utterance = { key: string; text: string; question?: number }
+/**
+ * Something to say: `key` keeps it said once; `question` is the open message a spoken answer replies to, in `project`'s
+ * instance when it is another project's.
+ */
+export type Utterance = { key: string; text: string; question?: number; project?: string }
 
 /** Markdown as it sounds: no code, links, tables, emphasis or list marks. */
 export function plain(markdown: string): string {
