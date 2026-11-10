@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadCollect, missesOf } from './misses.ts'
 import type { Entry } from './misses.ts'
-import { shown, warmAnchor, warmText } from './notice.ts'
+import { dollars, missCost, priced, shown, warmAnchor, warmText } from './notice.ts'
 import type { Warm } from './notice.ts'
 
 // Pi's code comes from the Ultimate clone's node_modules, as it does when the extension runs.
@@ -90,6 +90,37 @@ test('a ping before a compaction does not make the first reply after it a miss',
     reply(3, 2 * HOUR, 0, 20_000),
   ]
   assert.deepEqual(missesOf(entries, [ping], collect, models), [])
+})
+
+test("the rebuild line's cost is Pi's miss cost", () => {
+  const entries = [reply(1, 0, 0, 170_000), reply(2, 5 * HOUR, 0, 174_000)]
+  const [miss] = missesOf(entries, [], collect, models)
+  const usage = entries[1].model![0].usage as Parameters<typeof missCost>[0]
+  const rates = { input: 5, cacheRead: 0.5, cacheWrite: 6.25 }
+  assert.equal(missCost(usage, miss.missedTokens, rates).toFixed(6), miss.missedCost.toFixed(6))
+})
+
+// The rebuild in #40/20054: cliproxy lists claude-opus-5-5 at $0, so it was counted as free.
+test("a reply recorded at $0 is priced at its maker's API list price", () => {
+  const zero = { input: 0, cacheRead: 0, cacheWrite: 0 }
+  const opus = { input: 4, cacheRead: 0.2, cacheWrite: 5 }
+  const list = [
+    { provider: 'cliproxy', id: 'claude-opus-5-5', cost: zero },
+    { provider: 'anthropic', id: 'claude-opus-5-5', cost: opus },
+  ]
+  const find = (provider: string, id: string) =>
+    list.find((model) => model.provider === provider && model.id === id)
+  const model = priced(find, 'cliproxy', 'claude-opus-5-5')
+  assert.equal(model?.provider, 'anthropic')
+  const usage = {
+    input: 4,
+    cacheRead: 0,
+    cacheWrite: 201_599,
+    cacheWrite1h: 201_599,
+    cost: { input: 0, cacheRead: 0, cacheWrite: 0 },
+  }
+  assert.equal(dollars(missCost(usage, 201_603, model?.cost)), '$1.57')
+  assert.equal(missCost(usage, 201_603, undefined), 0)
 })
 
 test("Pi's threshold: small misses stay quiet", () => {

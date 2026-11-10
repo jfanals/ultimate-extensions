@@ -17,7 +17,7 @@ import type {
 } from '@earendil-works/pi-durable'
 import { loadCollect, missesOf } from './misses.ts'
 import type { Collect, Entry } from './misses.ts'
-import { shown } from './notice.ts'
+import { priced, shown } from './notice.ts'
 import type { Miss, Warm } from './notice.ts'
 
 /** The parts of `ExtensionHost` (`server/extensions.ts`) this facet uses. */
@@ -142,6 +142,25 @@ async function entriesOf(host: Host, id: number): Promise<Entry[]> {
   return entries
 }
 
+/**
+ * A reply recorded at $0 (a subscription proxy such as cliproxy lists its models at $0) priced at its model's API list
+ * price, so Pi's count reports what the miss is worth, as the transcript's cache-rebuilt line does.
+ */
+function repriced(
+  entry: Entry,
+  getModel: (provider: string, id: string) => Model<Api> | undefined,
+) {
+  const message = entry.model?.[0] as
+    | { role: string; timestamp: number; provider: string; model: string; usage: Usage }
+    | undefined
+  if (message?.role !== 'assistant' || message.usage.cost.total > 0) return entry
+  const model = getModel(message.provider, message.model)
+  if (!model) return entry
+  const usage = structuredClone(message.usage)
+  calculateCost(model, usage)
+  return { ...entry, model: [{ ...message, usage }] }
+}
+
 /** Counted misses per conversation, kept until its newest entry changes. */
 type Memo = Map<number, { newest: number; warmed: number; misses: Miss[] }>
 
@@ -158,10 +177,9 @@ async function missesIn(
   const newest = (await conversation.entries({}, 1, undefined, context)).items[0]?.id ?? 0
   const kept = memo.get(id)
   if (kept && kept.newest === newest && kept.warmed === (own.at(-1)?.at ?? 0)) return kept.misses
-  const entries = await entriesOf(host, id)
-  const models = {
-    getModel: (provider: string, model: string) => host.modelRuntime.getModel(provider, model),
-  }
+  const find = (provider: string, model: string) => host.modelRuntime.getModel(provider, model)
+  const models = { getModel: (provider: string, model: string) => priced(find, provider, model) }
+  const entries = (await entriesOf(host, id)).map((entry) => repriced(entry, models.getModel))
   const misses = missesOf(entries, own, collect, models).filter(shown)
   memo.set(id, { newest, warmed: own.at(-1)?.at ?? 0, misses })
   return misses

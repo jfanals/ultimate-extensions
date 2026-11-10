@@ -7,16 +7,20 @@ import {
   actionRef,
   api,
   cn,
+  definePoint,
   defineWebExtension,
   docRef,
   formatAgo,
+  formatTokens,
+  provide,
   useAction,
   useDocOf,
+  useModels,
   useNow,
   useTranscript,
 } from '@/sdk'
-import { dollars, failText, warmAnchor, warmText } from './notice.ts'
-import type { Miss, Warm } from './notice.ts'
+import { dollars, failText, missCost, priced, warmAnchor, warmText } from './notice.ts'
+import type { Miss, Usage, Warm } from './notice.ts'
 
 type Summary = {
   last?: Miss & { conversation: number }
@@ -28,6 +32,38 @@ type Summary = {
 const WarmsAction = actionRef<{ conversation: number }, Warm[]>('prompt-cache', 'warms')
 const SummaryAction = actionRef<null, Summary>('prompt-cache', 'summary')
 const WarmsDoc = docRef<{ warms: Warm[] }>('cache.warms')
+
+/** The parts of a rebuild Ultimate's `context` passes (`CacheBust` in its `lib/context-usage.ts`) that this reads. */
+type Bust = { written: number; read: number; before: number }
+/** `context`'s point that adds parts to its cache-rebuilt line (`CacheRebuiltDetail` in `extensions/context/ui.tsx`). */
+const CacheRebuiltDetail = definePoint<
+  { entry: EntryRecord; bust: Bust },
+  { text: string; title?: string } | undefined
+>('context.cache-rebuilt')
+
+/**
+ * What the rebuild cost over a cache hit, for the end of Ultimate's cache-rebuilt line: the tokens it wrote again that
+ * the prompt before already held, priced as the chip prices misses. Under a cent says nothing.
+ */
+function useRebuildCost({ entry, bust }: { entry: EntryRecord; bust: Bust }) {
+  const models = useModels()
+  const message = entry.model?.[0] as
+    | { role: string; provider: string; model: string; usage: Usage }
+    | undefined
+  if (message?.role !== 'assistant') return undefined
+  const model = priced(
+    (provider, id) => models?.models.find((item) => item.provider === provider && item.id === id),
+    message.provider,
+    message.model,
+  )
+  const missed = Math.min(bust.before, bust.written + bust.read) - bust.read
+  const cost = missCost(message.usage, missed, model?.cost)
+  if (cost < 0.01) return undefined
+  return {
+    text: dollars(cost),
+    title: `About ${dollars(cost)} more than a cache hit: ${formatTokens(missed)} tokens written to the cache again instead of read, at ${model && model.provider !== message.provider ? `${model.provider}'s API` : 'its'} list price. An estimate of what the rebuild is worth, not what a subscription bills.`,
+  }
+}
 
 /**
  * Each conversation's pings, fetched once: every row of a transcript reads the same answer, and a new ping or a
@@ -223,5 +259,6 @@ function Chip() {
 
 export default defineWebExtension({
   entries: { 'pi.assistant': Reply },
+  provides: [provide(CacheRebuiltDetail, useRebuildCost)],
   slots: { 'statusline.right': [{ component: Chip, order: -1 }] },
 })
