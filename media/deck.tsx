@@ -145,16 +145,21 @@ export function DeckCard({ path }: { path: string }) {
     }
   }
 
+  /** Which load Play started last: one given up for a retry no longer moves the progress. */
+  const attempt = useRef(0)
   const start = () => {
     if (state.kind !== 'ready' || !latest?.cues.length) return
     const begin = (deck: Deck, retry: boolean) => {
       const total = new Set(deck.cues.map((cue) => cue.image)).size + 1
+      const mine = ++attempt.current
       let done = 0
       setState({ kind: 'loading', done, total })
-      fetchParts(deck, new Map(), () => setState({ kind: 'loading', done: ++done, total })).then(
-        (loaded) => setState({ kind: 'playing', ...loaded }),
+      const tick = () =>
+        mine === attempt.current && setState({ kind: 'loading', done: ++done, total })
+      fetchParts(deck, new Map(), tick).then(
+        (loaded) => mine === attempt.current && setState({ kind: 'playing', ...loaded }),
         async (error: unknown) => {
-          if (loader.signal.aborted) return
+          if (loader.signal.aborted || mine !== attempt.current) return
           // A build that finishes meanwhile removes the parts it published on the way: load the finished deck.
           if (retry && deck.building) {
             const fresh = await api.action(DeckAction, { path }).catch(() => deck)
@@ -171,13 +176,20 @@ export function DeckCard({ path }: { path: string }) {
   // While a building deck plays, load each newer part as it is published.
   const newest = next ?? (state.kind === 'playing' ? state : undefined)
   const fetching = useRef<string>(undefined)
+  /** How long the part playing is, for a slow load of an older part that finishes after a newer one took over. */
+  const playingLength = useRef(0)
+  playingLength.current = state.kind === 'playing' ? state.deck.duration : 0
   useEffect(() => {
     if (!newest || !latest?.cues.length || latest.audio === newest.deck.audio) return
     if (fetching.current === latest.audio) return
     fetching.current = latest.audio
     fetchParts(latest, newest.frames).then(
       (loaded) =>
-        setNext((now) => (now && now.deck.duration >= loaded.deck.duration ? now : loaded)),
+        setNext((now) =>
+          loaded.deck.duration > Math.max(now?.deck.duration ?? 0, playingLength.current)
+            ? loaded
+            : now,
+        ),
       (error: unknown) => {
         if (loader.signal.aborted) return
         // A part the build removed on the way: the next read brings the newer one, loaded instead.
@@ -193,14 +205,33 @@ export function DeckCard({ path }: { path: string }) {
     setState({ kind: 'playing', ...next })
     setNext(undefined)
   }, [waiting, next])
+  /** More is coming after the part playing: the build goes on, or a newer part is out. */
+  const more =
+    state.kind === 'playing' && !!latest && (building || latest.audio !== state.deck.audio)
+  // A build that stops at the part playing ends the wait.
+  const held = waiting && more
+
+  const seek = (to: number) => {
+    const element = audio.current
+    if (state.kind !== 'playing' || !element) return
+    const clamped = Math.max(0, Math.min(state.deck.duration, to))
+    // A newer part still loading starts where the seek points, not where the last one ended.
+    if (resume.current !== undefined) resume.current = clamped
+    else element.currentTime = clamped
+    setTime(clamped)
+    if (held) {
+      setWaiting(false)
+      void element.play()
+    }
+  }
 
   const toggle = () => {
     if (state.kind === 'ready') return start()
     const element = audio.current
     if (state.kind !== 'playing' || !element) return
     // Waiting for the next part counts as playing: pausing stays at the end, playing there waits again.
-    if (waiting) setWaiting(false)
-    else if (element.ended && (next || building)) setWaiting(true)
+    if (held) setWaiting(false)
+    else if (element.ended && more) setWaiting(true)
     else if (element.paused) void element.play()
     else element.pause()
   }
@@ -209,10 +240,7 @@ export function DeckCard({ path }: { path: string }) {
     if (state.kind === 'ready' && (key === ' ' || key === 'k')) return (start(), true)
     const element = audio.current
     if (state.kind !== 'playing' || !element) return false
-    const jump = (by: number) => {
-      element.currentTime = Math.max(0, Math.min(state.deck.duration, element.currentTime + by))
-      setTime(element.currentTime)
-    }
+    const jump = (by: number) => seek(element.currentTime + by)
     if (key === ' ' || key === 'k') toggle()
     else if (key === 'ArrowLeft') jump(-5)
     else if (key === 'ArrowRight') jump(5)
@@ -279,15 +307,6 @@ export function DeckCard({ path }: { path: string }) {
   const cue = deck.cues[index]!
   const scenes = deck.cues.filter((c, i) => i === 0 || deck.cues[i - 1]!.scene !== c.scene)
   const image = playing ? state.frames.get(cue.image) : poster
-  const seek = (to: number) => {
-    const clamped = Math.max(0, Math.min(deck.duration, to))
-    if (audio.current) audio.current.currentTime = clamped
-    setTime(clamped)
-    if (waiting) {
-      setWaiting(false)
-      void audio.current?.play()
-    }
-  }
   const skip = (direction: 1 | -1) => {
     const current = scenes.findLastIndex((s) => s.start <= time + 0.01)
     // Back within the first two seconds of a scene goes to the previous one, like a music player.
@@ -326,7 +345,7 @@ export function DeckCard({ path }: { path: string }) {
             </span>
           </span>
         )}
-        {playing && waiting && (
+        {held && (
           // The end of what is built so far: the next part takes over as soon as it is loaded.
           <span
             className="absolute inset-0 flex items-center justify-center"
@@ -359,17 +378,19 @@ export function DeckCard({ path }: { path: string }) {
       {playing && (
         // oxlint-disable-next-line jsx-a11y/media-has-caption -- the stage shows each spoken line as a caption.
         <audio
-          autoPlay
           className="hidden"
           onEnded={() => {
             setPaused(true)
-            if (next || building) setWaiting(true)
+            if (more) setWaiting(true)
           }}
           onLoadedMetadata={(event) => {
-            // A newer part of a building deck picks up where the last one stopped, without another tap on a phone.
-            if (resume.current === undefined) return
-            event.currentTarget.currentTime = resume.current
-            resume.current = undefined
+            // Play starts at once; a newer part of a building deck picks up where the last one stopped, unless the
+            // listener paused meanwhile. play() here also keeps going on a phone without another tap.
+            if (resume.current !== undefined) {
+              event.currentTarget.currentTime = resume.current
+              resume.current = undefined
+              if (!held) return
+            }
             void event.currentTarget.play()
           }}
           onPause={() => setPaused(true)}
@@ -387,13 +408,13 @@ export function DeckCard({ path }: { path: string }) {
       )}
       <span className="flex items-center gap-1 px-1.5 py-1.5">
         <button
-          aria-label={paused && !waiting ? 'Play' : 'Pause'}
+          aria-label={paused && !held ? 'Play' : 'Pause'}
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-85 disabled:opacity-50"
           disabled={state.kind === 'loading'}
           onClick={toggle}
           type="button"
         >
-          {paused && !waiting ? (
+          {paused && !held ? (
             <PlayIcon className="size-4 translate-x-px" fill="currentColor" />
           ) : (
             <PauseIcon className="size-4" fill="currentColor" />
