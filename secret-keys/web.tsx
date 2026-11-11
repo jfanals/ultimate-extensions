@@ -95,14 +95,15 @@ function NewSecret({ onClose }: { onClose: () => void }) {
   const listed = !!saved && !!stored.data?.some((secret) => secret.name === saved.name)
   useEffect(() => {
     if (!saved) return
-    const open = () => {
-      if (saved.value) ui.openPanel('secrets')
-      else events.emit('secrets:open', { name: saved.name })
+    // A saved value opens the panel, not the row: `secrets:open` opens its form, which would ask for the value again.
+    const open = (row: boolean) => {
+      if (row && !saved.value) events.emit('secrets:open', { name: saved.name })
+      else ui.openPanel('secrets')
       onClose()
     }
-    if (listed) return open()
-    // A reload slower than this still lists it once done; the panel then shows the row without its form open.
-    const timer = setTimeout(open, 5000)
+    if (listed) return open(true)
+    // A slower reload still lists it once done. No row is requested meanwhile: the panel drops a request its list lacks.
+    const timer = setTimeout(() => open(false), 5000)
     return () => clearTimeout(timer)
   }, [saved, listed])
   const problem = nameProblem(name)

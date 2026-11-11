@@ -69,6 +69,21 @@ test('ultimate-secret prints a stored value without a newline and fails clearly 
     assert.equal((await run('lower')).code, 2)
     await chmod(store, 0o644)
     assert.match((await run('MY_KEY')).stderr, /readable by others/)
+    // One entry Ultimate would reject (a newline in its value) refuses the whole store, as Ultimate's readStore does.
+    await writeFile(
+      store,
+      JSON.stringify({
+        secrets: {
+          MY_KEY: { value: 'v4lue', updatedAt: '' },
+          BAD: { value: 'a\nb', updatedAt: '' },
+        },
+      }),
+    )
+    await chmod(store, 0o600)
+    const invalid = await run('MY_KEY')
+    assert.equal(invalid.code, 1)
+    assert.equal(invalid.stdout, '')
+    assert.match(invalid.stderr, /invalid secret store/)
   } finally {
     await rm(home, { recursive: true })
   }
