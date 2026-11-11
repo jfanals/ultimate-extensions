@@ -20,6 +20,7 @@ imports it from the clone (its README says which files it follows).
 | [media](media/)               | Audio, video, decks and text files that agents link or name in inline code play or open inline.    |
 | [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
 | [todos-badge](todos-badge/)   | The To-dos tab counts what waits on you: amber while a question does, grey for only your to-dos.   |
+| [secret-keys](secret-keys/)   | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
 
 ## Install
 
@@ -53,6 +54,8 @@ No restart: Ultimate reloads an extension when its files change.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.
 - **awake** works on macOS only.
 - **todos-badge** needs an Ultimate whose web SDK has `panelBadges`; on an older one it loads and shows nothing.
+- **secret-keys** uses Ultimate's Secrets extension; link its `ultimate-secret` script onto your PATH to read values
+  from scripts and configs.
 - **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
 
 The others stand alone. Each README lists its requirements, settings and tests.
@@ -63,7 +66,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts
+node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
