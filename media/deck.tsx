@@ -76,7 +76,7 @@ export function DeckCard({ path }: { path: string }) {
   const [paused, setPaused] = useState(true)
   const audio = useRef<HTMLAudioElement>(null)
   /** Where a newer part's audio picks up once it has loaded. */
-  const resume = useRef<number>(undefined)
+  const resume = useRef<{ at: number; play: boolean }>(undefined)
   const stage = useRef<HTMLSpanElement>(null)
   const [captions, setCaptions] = useCaptions()
 
@@ -201,7 +201,7 @@ export function DeckCard({ path }: { path: string }) {
   // Playing that reached the end of its part goes on in the newer one, from where it stopped.
   useEffect(() => {
     if (!waiting || !next) return
-    resume.current = audio.current?.currentTime
+    resume.current = { at: audio.current?.currentTime ?? 0, play: true }
     setState({ kind: 'playing', ...next })
     setNext(undefined)
   }, [waiting, next])
@@ -216,7 +216,7 @@ export function DeckCard({ path }: { path: string }) {
     if (state.kind !== 'playing' || !element) return
     const clamped = Math.max(0, Math.min(state.deck.duration, to))
     // A newer part still loading starts where the seek points, not where the last one ended.
-    if (resume.current !== undefined) resume.current = clamped
+    if (resume.current) resume.current.at = clamped
     else element.currentTime = clamped
     setTime(clamped)
     if (held) {
@@ -230,7 +230,8 @@ export function DeckCard({ path }: { path: string }) {
     const element = audio.current
     if (state.kind !== 'playing' || !element) return
     // Waiting for the next part counts as playing: pausing stays at the end, playing there waits again.
-    if (held) setWaiting(false)
+    if (resume.current) resume.current.play = !resume.current.play
+    else if (held) setWaiting(false)
     else if (element.ended && more) setWaiting(true)
     else if (element.paused) void element.play()
     else element.pause()
@@ -386,11 +387,10 @@ export function DeckCard({ path }: { path: string }) {
           onLoadedMetadata={(event) => {
             // Play starts at once; a newer part of a building deck picks up where the last one stopped, unless the
             // listener paused meanwhile. play() here also keeps going on a phone without another tap.
-            if (resume.current !== undefined) {
-              event.currentTarget.currentTime = resume.current
-              resume.current = undefined
-              if (!held) return
-            }
+            const { at, play } = resume.current ?? { at: undefined, play: true }
+            resume.current = undefined
+            if (at !== undefined) event.currentTarget.currentTime = at
+            if (!play) return
             void event.currentTarget.play()
           }}
           onPause={() => setPaused(true)}
