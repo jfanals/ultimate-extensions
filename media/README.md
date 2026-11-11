@@ -12,6 +12,14 @@ the first slide shows at once; Play loads the narration and the slides, and each
 its slide, with a CC button, slide skipping, a scrubber and full screen. Decks built before captions were text (each
 line burned into its slide; their `deck.json` has no `"captions": true`) play as they are, with no caption overlay.
 
+A deck can play while it builds. `deck.py` writes `deck.json` with `"building": true` as soon as it starts and
+republishes it as lines are voiced (the first at once, then each time the deck has doubled), each part with a
+narration track of its length. The card reads it again every second while it builds: "Building…" until the first
+line is out, then the usual player, whose duration ends in "…". The next part loads while the current one plays and
+takes over where it ends; if playing gets there first, a spinner waits on the slide. A build that fails keeps what it
+published and shows "Build stopped:" with its `error` under the controls. A build killed outright (`kill -9`) leaves
+the card building until the deck is built again.
+
 ## Text files
 
 A link to a text file (`[plan](/Users/me/my-app/docs/plan.md)`) becomes a one-line chip in the text, styled like a

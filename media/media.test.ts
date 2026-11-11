@@ -77,7 +77,7 @@ test('reads a deck whose files stay in its folder', async (t) => {
   t.after(() => rm(base, { recursive: true, force: true }))
   const folder = join(base, 'talk.deck')
   await mkdir(folder)
-  const deck = (cues: unknown[]) =>
+  const deck = (cues: unknown[], more: object = {}) =>
     writeFile(
       join(folder, 'deck.json'),
       JSON.stringify({
@@ -87,6 +87,7 @@ test('reads a deck whose files stay in its folder', async (t) => {
         duration: 3,
         audio: 'narration.m4a',
         cues,
+        ...more,
       }),
     )
   await deck([{ scene: 0, text: 'Hi.', image: 'frames/a.jpg', start: 0 }])
@@ -95,6 +96,15 @@ test('reads a deck whose files stay in its folder', async (t) => {
   // A deck without `captions` burned its lines into the slides, so the player adds none.
   assert.equal(read.captions, false)
   assert.equal(read.cues[0]!.image, join(folder, 'frames', 'a.jpg'))
+  assert.equal(read.building, false)
+
+  // A deck still building may have no cue yet, and one whose build failed says why.
+  await deck([], { building: true, audio: '' })
+  assert.deepEqual((await readDeck(join(folder, 'deck.json'), [base])).cues, [])
+  await deck([], { audio: '', error: 'scene 2 (Plan): Mermaid cannot draw this diagram' })
+  assert.match((await readDeck(join(folder, 'deck.json'), [base])).error!, /Mermaid/)
+  await deck([])
+  await assert.rejects(readDeck(join(folder, 'deck.json'), [base]), /Not a deck.json/)
 
   await deck([{ scene: 0, text: 'Hi.', image: '../../secret.jpg', start: 0 }])
   await assert.rejects(readDeck(join(folder, 'deck.json'), [base]), /Not a deck.json/)

@@ -24,16 +24,24 @@ type Deck = {
   audio: string
   /** Whether the player draws the captions; older decks burned each line into its slide. */
   captions: boolean
+  /** The cues so far: none yet while a build starts, or when it failed before the first. */
   cues: { scene: number; text: string; image: string; start: number }[]
+  /** Whether deck.py is still adding cues; each new part comes with a longer audio track. */
+  building: boolean
+  /** Why the build stopped before the deck was finished. */
+  error?: string
 }
 const DeckAction = actionRef<{ path: string }, Deck>('media', 'deck')
+
+/** A deck's audio and slides as Blob URLs. */
+type Loaded = { deck: Deck; audio: string; frames: Map<string, string> }
 
 type State =
   | { kind: 'checking' }
   | { kind: 'failed'; reason: string }
-  | { kind: 'ready'; deck: Deck; poster?: string }
-  | { kind: 'loading'; deck: Deck; poster?: string; done: number; total: number }
-  | { kind: 'playing'; deck: Deck; audio: string; frames: Map<string, string> }
+  | { kind: 'ready' }
+  | { kind: 'loading'; done: number; total: number }
+  | ({ kind: 'playing' } & Loaded)
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
@@ -48,38 +56,72 @@ const cueAt = (deck: Deck, time: number) => {
 /**
  * A link to a narrated deck's deck.json, as a slide player: each slide with its spoken line, the narration track,
  * scene skipping and a scrubber. The first slide shows at once; Play loads the audio and the other slides.
+ *
+ * A deck still building (`building`) is read again every second and plays what is there: each newer part arrives with
+ * a longer audio track, loaded while the current one plays and taken over where it ends.
  */
 export function DeckCard({ path }: { path: string }) {
   const [state, setState] = useState<State>({ kind: 'checking' })
+  /** The deck as deck.json says now; while playing, `state.deck` is the part loaded. */
+  const [latest, setLatest] = useState<Deck>()
+  const [poster, setPoster] = useState<string>()
+  /** The newest part, loaded and ready to take over when the one playing ends. */
+  const [next, setNext] = useState<Loaded>()
+  /** Playing reached the end of the part loaded while the deck builds on. */
+  const [waiting, setWaiting] = useState(false)
   const [loader] = useState(() => new AbortController())
   // Every Blob URL this card made, released when it goes away.
   const [made] = useState(() => new Set<string>())
   const [time, setTime] = useState(0)
   const [paused, setPaused] = useState(true)
   const audio = useRef<HTMLAudioElement>(null)
+  /** Where a newer part's audio picks up once it has loaded. */
+  const resume = useRef<number>(undefined)
   const stage = useRef<HTMLSpanElement>(null)
   const [captions, setCaptions] = useCaptions()
 
   useEffect(() => {
     let live = true
-    api
-      .action(DeckAction, { path })
-      .then(async (deck) => {
+    api.action(DeckAction, { path }).then(
+      (deck) => {
         if (!live) return
-        setState({ kind: 'ready', deck })
-        const poster = await load(deck.cues[0]!.image, () => {}, loader.signal)
-        made.add(poster)
-        if (live) setState((now) => (now.kind === 'ready' ? { ...now, poster } : now))
-      })
-      .catch((error: unknown) => {
-        // Unmounting aborts the poster load; there is nothing left to show it on.
-        if (live && !loader.signal.aborted)
-          setState({ kind: 'failed', reason: errorMessage(error) })
-      })
+        setLatest(deck)
+        setState({ kind: 'ready' })
+      },
+      (error: unknown) => live && setState({ kind: 'failed', reason: errorMessage(error) }),
+    )
     return () => {
       live = false
     }
-  }, [path, loader, made])
+  }, [path])
+  const building = latest?.building === true
+  useEffect(() => {
+    if (!building) return
+    let live = true
+    void (async () => {
+      while (live) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        // A read that fails while the build rewrites the deck is tried again a second later.
+        const deck = await api.action(DeckAction, { path }).catch(() => undefined)
+        if (!live || !deck) continue
+        setLatest((now) => (JSON.stringify(now) === JSON.stringify(deck) ? now : deck))
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [path, building])
+  const first = latest?.cues[0]?.image
+  useEffect(() => {
+    if (!first) return
+    load(first, () => {}, loader.signal).then(
+      (url) => (made.add(url), setPoster(url)),
+      (error: unknown) => {
+        // Unmounting aborts the poster load; there is nothing left to show it on.
+        if (!loader.signal.aborted) setState({ kind: 'failed', reason: errorMessage(error) })
+      },
+    )
+  }, [first, loader, made])
   useEffect(
     () => () => {
       loader.abort()
@@ -88,35 +130,79 @@ export function DeckCard({ path }: { path: string }) {
     [loader, made],
   )
 
+  /** `deck`'s audio and the slides `have` lacks, as Blob URLs; `tick` after each file. */
+  const fetchParts = async (deck: Deck, have: Map<string, string>, tick = () => {}) => {
+    const images = [...new Set(deck.cues.map((cue) => cue.image))].filter((i) => !have.has(i))
+    const keep = (url: string) => (made.add(url), tick(), url)
+    const [audioUrl, ...frames] = await Promise.all([
+      load(deck.audio, () => {}, loader.signal).then(keep),
+      ...images.map((image) => load(image, () => {}, loader.signal).then(keep)),
+    ])
+    return {
+      deck,
+      audio: audioUrl!,
+      frames: new Map([...have, ...images.map((image, i) => [image, frames[i]!] as const)]),
+    }
+  }
+
   const start = () => {
-    if (state.kind !== 'ready') return
-    const { deck, poster } = state
-    const images = [...new Set(deck.cues.map((cue) => cue.image))]
-    const total = images.length + 1
-    let done = 0
-    const tick = (url: string) => (
-      made.add(url),
-      setState({ kind: 'loading', deck, poster, done: ++done, total })
-    )
-    setState({ kind: 'loading', deck, poster, done, total })
-    Promise.all([
-      load(deck.audio, () => {}, loader.signal).then((url) => (tick(url), url)),
-      ...images.map((image) =>
-        load(image, () => {}, loader.signal).then((url) => (tick(url), [image, url] as const)),
-      ),
-    ]).then(
-      ([audioUrl, ...frames]) => {
-        setState({
-          kind: 'playing',
-          deck,
-          audio: audioUrl as string,
-          frames: new Map(frames as (readonly [string, string])[]),
-        })
-      },
+    if (state.kind !== 'ready' || !latest?.cues.length) return
+    const begin = (deck: Deck, retry: boolean) => {
+      const total = new Set(deck.cues.map((cue) => cue.image)).size + 1
+      let done = 0
+      setState({ kind: 'loading', done, total })
+      fetchParts(deck, new Map(), () => setState({ kind: 'loading', done: ++done, total })).then(
+        (loaded) => setState({ kind: 'playing', ...loaded }),
+        async (error: unknown) => {
+          if (loader.signal.aborted) return
+          // A build that finishes meanwhile removes the parts it published on the way: load the finished deck.
+          if (retry && deck.building) {
+            const fresh = await api.action(DeckAction, { path }).catch(() => deck)
+            setLatest(fresh)
+            return begin(fresh, false)
+          }
+          setState({ kind: 'failed', reason: errorMessage(error) })
+        },
+      )
+    }
+    begin(latest, true)
+  }
+
+  // While a building deck plays, load each newer part as it is published.
+  const newest = next ?? (state.kind === 'playing' ? state : undefined)
+  const fetching = useRef<string>(undefined)
+  useEffect(() => {
+    if (!newest || !latest?.cues.length || latest.audio === newest.deck.audio) return
+    if (fetching.current === latest.audio) return
+    fetching.current = latest.audio
+    fetchParts(latest, newest.frames).then(
+      (loaded) =>
+        setNext((now) => (now && now.deck.duration >= loaded.deck.duration ? now : loaded)),
       (error: unknown) => {
-        if (!loader.signal.aborted) setState({ kind: 'failed', reason: errorMessage(error) })
+        if (loader.signal.aborted) return
+        // A part the build removed on the way: the next read brings the newer one, loaded instead.
+        if (latest.building) fetching.current = undefined
+        else setState({ kind: 'failed', reason: errorMessage(error) })
       },
     )
+  })
+  // Playing that reached the end of its part goes on in the newer one, from where it stopped.
+  useEffect(() => {
+    if (!waiting || !next) return
+    resume.current = audio.current?.currentTime
+    setState({ kind: 'playing', ...next })
+    setNext(undefined)
+  }, [waiting, next])
+
+  const toggle = () => {
+    if (state.kind === 'ready') return start()
+    const element = audio.current
+    if (state.kind !== 'playing' || !element) return
+    // Waiting for the next part counts as playing: pausing stays at the end, playing there waits again.
+    if (waiting) setWaiting(false)
+    else if (element.ended && (next || building)) setWaiting(true)
+    else if (element.paused) void element.play()
+    else element.pause()
   }
 
   const keys = usePlayerKeys((key) => {
@@ -127,10 +213,8 @@ export function DeckCard({ path }: { path: string }) {
       element.currentTime = Math.max(0, Math.min(state.deck.duration, element.currentTime + by))
       setTime(element.currentTime)
     }
-    if (key === ' ' || key === 'k') {
-      if (element.paused) void element.play()
-      else element.pause()
-    } else if (key === 'ArrowLeft') jump(-5)
+    if (key === ' ' || key === 'k') toggle()
+    else if (key === 'ArrowLeft') jump(-5)
     else if (key === 'ArrowRight') jump(5)
     else if (key === 'j') jump(-10)
     else if (key === 'l') jump(10)
@@ -150,7 +234,15 @@ export function DeckCard({ path }: { path: string }) {
     return () => cancelAnimationFrame(frame)
   }, [paused])
 
-  if (state.kind === 'checking' || state.kind === 'failed')
+  // No slide to show yet: a build that has not voiced its first line, or one that failed before it.
+  if (state.kind === 'checking' || state.kind === 'failed' || !latest?.cues.length) {
+    const note =
+      state.kind === 'checking'
+        ? 'Checking…'
+        : state.kind === 'failed'
+          ? state.reason
+          : (latest?.error ?? 'Building…')
+    const failed = state.kind === 'failed' || !!latest?.error
     return (
       <span
         className="my-1 flex w-full max-w-2xl items-center gap-2.5 rounded-md border border-border/80 bg-terminal px-2.5 py-2 not-prose"
@@ -158,38 +250,43 @@ export function DeckCard({ path }: { path: string }) {
         title={path}
       >
         <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
-          {state.kind === 'checking' ? (
-            <LoaderCircleIcon className="size-5 motion-safe:animate-spin" />
-          ) : (
+          {failed ? (
             <PresentationIcon className="size-5" strokeWidth={1.5} />
+          ) : (
+            <LoaderCircleIcon className="size-5 motion-safe:animate-spin" />
           )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] leading-5 text-foreground/90">
-            {path.split('/').at(-2)}
+            {latest?.title || path.split('/').at(-2)}
           </span>
           <span
             className={cn(
               'block truncate text-[11px] leading-4 text-muted-foreground',
-              state.kind === 'failed' && 'text-destructive/80',
+              failed && 'text-destructive/80',
             )}
           >
-            {state.kind === 'checking' ? 'Checking…' : state.reason}
+            {note}
           </span>
         </span>
       </span>
     )
+  }
 
-  const { deck } = state
   const playing = state.kind === 'playing'
+  const deck = playing ? state.deck : latest
   const index = cueAt(deck, time)
   const cue = deck.cues[index]!
   const scenes = deck.cues.filter((c, i) => i === 0 || deck.cues[i - 1]!.scene !== c.scene)
-  const image = playing ? state.frames.get(cue.image) : state.poster
+  const image = playing ? state.frames.get(cue.image) : poster
   const seek = (to: number) => {
     const clamped = Math.max(0, Math.min(deck.duration, to))
     if (audio.current) audio.current.currentTime = clamped
     setTime(clamped)
+    if (waiting) {
+      setWaiting(false)
+      void audio.current?.play()
+    }
   }
   const skip = (direction: 1 | -1) => {
     const current = scenes.findLastIndex((s) => s.start <= time + 0.01)
@@ -202,14 +299,6 @@ export function DeckCard({ path }: { path: string }) {
           : scenes[current - 1]
     if (target) seek(target.start)
   }
-  const toggle = () => {
-    if (!playing) return start()
-    const element = audio.current
-    if (!element) return
-    if (element.paused) void element.play()
-    else element.pause()
-  }
-
   return (
     <span
       className="group/deck my-1 block w-full max-w-2xl overflow-hidden rounded-md border border-border/80 bg-terminal align-top not-prose"
@@ -237,6 +326,18 @@ export function DeckCard({ path }: { path: string }) {
             </span>
           </span>
         )}
+        {playing && waiting && (
+          // The end of what is built so far: the next part takes over as soon as it is loaded.
+          <span
+            className="absolute inset-0 flex items-center justify-center"
+            data-ui="deck-waiting"
+            title="Building…"
+          >
+            <span className="flex size-14 items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg">
+              <LoaderCircleIcon className="size-6 motion-safe:animate-spin" />
+            </span>
+          </span>
+        )}
         {!playing && (
           <button
             aria-label={`Play ${deck.title}`}
@@ -260,23 +361,39 @@ export function DeckCard({ path }: { path: string }) {
         <audio
           autoPlay
           className="hidden"
-          onEnded={() => setPaused(true)}
+          onEnded={() => {
+            setPaused(true)
+            if (next || building) setWaiting(true)
+          }}
+          onLoadedMetadata={(event) => {
+            // A newer part of a building deck picks up where the last one stopped, without another tap on a phone.
+            if (resume.current === undefined) return
+            event.currentTarget.currentTime = resume.current
+            resume.current = undefined
+            void event.currentTarget.play()
+          }}
           onPause={() => setPaused(true)}
-          onPlay={() => setPaused(false)}
-          onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+          onPlay={() => {
+            setPaused(false)
+            setWaiting(false)
+          }}
+          onTimeUpdate={(event) => {
+            // A new part reports 0 before it moves to where the last one stopped.
+            if (resume.current === undefined) setTime(event.currentTarget.currentTime)
+          }}
           ref={audio}
           src={state.audio}
         />
       )}
       <span className="flex items-center gap-1 px-1.5 py-1.5">
         <button
-          aria-label={paused ? 'Play' : 'Pause'}
+          aria-label={paused && !waiting ? 'Play' : 'Pause'}
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-85 disabled:opacity-50"
           disabled={state.kind === 'loading'}
           onClick={toggle}
           type="button"
         >
-          {paused ? (
+          {paused && !waiting ? (
             <PlayIcon className="size-4 translate-x-px" fill="currentColor" />
           ) : (
             <PauseIcon className="size-4" fill="currentColor" />
@@ -317,7 +434,7 @@ export function DeckCard({ path }: { path: string }) {
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
           {state.kind === 'loading'
             ? `Loading ${Math.floor((state.done / state.total) * 100)}%`
-            : `${clock(time)} / ${clock(deck.duration)}`}
+            : `${clock(time)} / ${clock(deck.duration)}${building || latest.audio !== deck.audio ? '…' : ''}`}
         </span>
         <span className="shrink-0 px-1.5 text-[11px] tabular-nums text-muted-foreground">
           {scenes.findLastIndex((s) => s.start <= time + 0.01) + 1}/{scenes.length}
@@ -343,6 +460,11 @@ export function DeckCard({ path }: { path: string }) {
           <ExpandIcon className="size-4" />
         </DeckButton>
       </span>
+      {latest.error && (
+        <span className="block px-2.5 pb-2 text-[11px] leading-4 text-destructive/80">
+          Build stopped: {latest.error}
+        </span>
+      )}
     </span>
   )
 }

@@ -234,7 +234,12 @@ export type Deck = {
   audio: string
   /** Whether the player draws each cue as a caption: decks before it burned the line into every slide. */
   captions: boolean
+  /** The cues so far; empty (and `audio` '') only while the deck builds or after its build failed. */
   cues: { scene: number; text: string; image: string; start: number }[]
+  /** Whether `deck.py` is still adding cues: the deck plays what is there and grows. */
+  building: boolean
+  /** Why the build stopped before the deck was finished. */
+  error?: string
 }
 
 /**
@@ -263,14 +268,19 @@ export async function readDeck(path: string, roots: string[]): Promise<Deck> {
     if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('Not a deck.json')
     return value
   }
-  if (!Array.isArray(raw.cues) || !raw.cues.length) throw new Error('Not a deck.json')
+  const building = raw.building === true
+  const error = typeof raw.error === 'string' ? raw.error : undefined
+  if (!Array.isArray(raw.cues) || (!raw.cues.length && !building && error === undefined))
+    throw new Error('Not a deck.json')
   return {
     title: typeof raw.title === 'string' ? raw.title : '',
     width: number(raw.width),
     height: number(raw.height),
     duration: number(raw.duration),
-    audio: inside(raw.audio),
+    audio: raw.cues.length ? inside(raw.audio) : '',
     captions: raw.captions === true,
+    building,
+    ...(error !== undefined && { error }),
     cues: raw.cues.map((cue: Record<string, unknown>) => ({
       scene: number(cue.scene),
       text: typeof cue.text === 'string' ? cue.text : '',
