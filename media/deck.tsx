@@ -230,8 +230,11 @@ export function DeckCard({ path }: { path: string }) {
     const element = audio.current
     if (state.kind !== 'playing' || !element) return
     // Waiting for the next part counts as playing: pausing stays at the end, playing there waits again.
-    if (resume.current) resume.current.play = !resume.current.play
-    else if (held) setWaiting(false)
+    if (resume.current) {
+      // A newer part is loading: pausing now keeps it paused, and no later part plays it on.
+      resume.current.play = !resume.current.play
+      setWaiting(resume.current.play)
+    } else if (held) setWaiting(false)
     else if (element.ended && more) setWaiting(true)
     else if (element.paused) void element.play()
     else element.pause()
