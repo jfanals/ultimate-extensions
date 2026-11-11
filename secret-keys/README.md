@@ -14,7 +14,8 @@ declares yours. Name a key in ⌘K **New secret…**, with its value now or late
 - **⌘K New secret…**: a name (checked as you type: capital letters, digits and `_`), an optional value, and an
   optional description and link. With a value it saves it, as the panel does. Without one it adds an **empty key**,
   shown in Secrets as missing with its Add button, and in the status line's setup check until you add it. Either way
-  the Secrets panel then opens at the key.
+  the Secrets panel then opens at the key. The setup check words an empty key as "Without it, secret-keys can't
+  work": that is Ultimate's text for any missing secret. Nothing here breaks; it only reminds you to add the value.
 - **⌘K Forget a secret…**: the keys added here or by an agent; Forget takes one off the Secrets list. A value you
   stored stays until you delete it in the panel.
 - **`request_secret {name, description, url?}`**, an agent tool: it adds an empty key and tells the agent to send you to
