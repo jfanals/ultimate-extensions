@@ -85,16 +85,37 @@ export function rowState(
   }
 }
 
-/** Waiting messages across projects and how many projects they are in, how many projects work, and every question oldest first. */
+/** Waiting messages across projects and how many projects they are in, and how many projects work. */
 export function totals(rows: readonly Row[]) {
   const waitingRows = rows.filter((row) => row.waiting.length > 0)
   return {
     waiting: waitingRows.reduce((sum, row) => sum + row.waiting.length, 0),
     projects: waitingRows.length,
     working: rows.filter((row) => row.busy > 0).length,
-    questions: rows
-      .flatMap((row) => row.waiting.map((question) => ({ ...question, project: row })))
-      .toSorted((a, b) => a.at - b.at),
+  }
+}
+
+/** The projects with questions waiting, each with its questions oldest first; the project waiting longest first. */
+export const groups = (rows: readonly Row[]) =>
+  rows
+    .filter((row) => row.waiting.length > 0)
+    .map((row) => ({ row, questions: row.waiting.toSorted((a, b) => a.at - b.at) }))
+    .toSorted((a, b) => a.questions[0].at - b.questions[0].at)
+
+/**
+ * The sidebar's Elsewhere row for what waits in the other projects: the count, where (up to two names, else how many
+ * projects), and the oldest question to open; undefined when nothing waits elsewhere.
+ */
+export function elsewhere(rows: readonly Row[]) {
+  const waiting = groups(rows.filter((row) => !row.current))
+  if (!waiting.length) return undefined
+  return {
+    count: waiting.reduce((sum, group) => sum + group.questions.length, 0),
+    where:
+      waiting.length > 2
+        ? `in ${waiting.length} projects`
+        : `in ${waiting.map((group) => group.row.name).join(', ')}`,
+    oldest: { row: waiting[0].row, question: waiting[0].questions[0] },
   }
 }
 
@@ -107,29 +128,22 @@ export const ordered = (rows: readonly Row[]) =>
 
 /**
  * Where a project opens from this page: same protocol and host, the project's port. Over the tailnet (HTTPS) that is its
- * tailnet port; on loopback or `ultimate.localhost` its local one. With `question`, opened at that message's
- * conversation. `#projects-open` tells the target to show its conversation even when it was last left on Projects, and
- * `#projects-open:<message>` to scroll to that question.
+ * tailnet port; on loopback or `ultimate.localhost` its local one. With `message`, at that item in its Inbox
+ * (`?inbox=<message>`, the inbox extension's link). Without, `#projects-open` tells the target to show its conversation
+ * even when it was last left on Projects.
  */
 export function projectUrl(
   page: { protocol: string; hostname: string },
   row: Pick<Row, 'port' | 'tailnetPort'>,
-  question?: Pick<Waiting, 'conversation' | 'message'>,
+  message?: number,
 ) {
   const port = page.protocol === 'https:' ? row.tailnetPort : row.port
   if (port === undefined) return undefined
-  const at = question ? `?conversation=${question.conversation}` : ''
-  return `${page.protocol}//${page.hostname}:${port}/${at}${ARRIVAL}${question ? `:${question.message}` : ''}`
+  return `${page.protocol}//${page.hostname}:${port}/${message === undefined ? ARRIVAL : `?inbox=${message}`}`
 }
 
-const ARRIVAL = '#projects-open'
-
-/** What a page's hash asks on arrival from another project: nothing, the conversation, or one question in it. */
-export function arrival(hash: string): { message?: number } | undefined {
-  if (hash === ARRIVAL) return {}
-  const match = new RegExp(`^${ARRIVAL}:(\\d+)$`).exec(hash)
-  return match ? { message: Number(match[1]) } : undefined
-}
+/** The hash a project opened from another project's Projects arrives with: show the conversation, not Projects. */
+export const ARRIVAL = '#projects-open'
 
 /**
  * Whether `name` may be a new project's folder: one plain path segment of letters, digits, `.`, `_` and `-`, not

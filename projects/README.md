@@ -9,6 +9,9 @@ of them.
   tab-status folder must sit next to it, as it does in the clone. Install both.
 - **project-icon**, from this repository: each row shows its project's tile (`../project-icon/`), with the
   `projectIcon` overrides applied.
+- Ultimate's built-in **inbox** extension: every question opens in its project's Inbox (`?inbox=<message>`), and the
+  sidebar row comes from the sidebar's `sidebar.under-ultimate` point (imported from the clone,
+  `@/../../extensions/sidebar/ui.tsx`).
 - Optional: Ultimate's built-in tailscale extension, for links that open over the tailnet.
 
 ## Using it
@@ -16,6 +19,10 @@ of them.
 - **The counter** in the status line, `◆ 3 waiting in 2 projects`, counts the messages waiting on your answer in every
   project; amber while any waits, a quiet grey `◆ 0` when none does. On a phone it stays on the line as `◆ 3 waiting`.
   Click it to open Projects.
+- **Elsewhere**, a sidebar row under the Inbox's, counts what waits on you in the _other_ projects (the Inbox row
+  already counts this one): amber `Elsewhere · 3 in RevenueHunt, ha`, or `in 4 projects` past two. A click opens the
+  oldest of them in its project's Inbox, ready to answer; the counter is one click away for the whole picture. With
+  nothing waiting elsewhere the row is gone.
 - **Projects** (a surface, `mod+1…9` or ⌘K **Open Projects**) lists each project with its tile, folder and status, the
   current one first and marked **this window**:
 
@@ -31,13 +38,15 @@ of them.
   | spinner         | `stopping…` after Stop, until the project lets go             |
   | hollow          | `not answering`: running but did not answer in 5 s (hover it) |
 
-  Below, every question waiting on you across projects, oldest first.
+  Below, every question waiting on you, grouped by project: the project waiting longest first, its questions oldest
+  first, each opening that project's Inbox at it.
 
 - **The whole row opens it.** Click or tap anywhere on a row: a running project opens in the same window, the
   **this window** row opens this project's @ultimate, a stopped one starts and opens once it answers, a starting one
-  opens once it answers (the status adds `opens when ready`). The row is one button, so Tab reaches it and Enter opens
-  it. A question opens its project at the conversation that asked, scrolled to the question's card. That project's own
-  counter and Projects tab bring you back. Over the tailnet (HTTPS) links use each project's tailnet port, else its
+  opens once it answers (the status adds `opens when ready`). A row with `n waiting` opens that project's Inbox at its
+  oldest question instead. The row is one button, so Tab reaches it and Enter opens it. A question opens its project's
+  Inbox at that item (`?inbox=<message>`); one in this project opens the Inbox in place, without a reload. That
+  project's own counter and Projects tab bring you back. Over the tailnet (HTTPS) links use each project's tailnet port, else its
   loopback port.
 - **Desktop and tablet:** the one other action sits in its own column at the right, outside the row's button: **Stop**
   on a running project, **Start** (start without opening) and **⋯** → **Hide** on a stopped one.
@@ -101,9 +110,10 @@ tab-status's rules (the same priority as the browser tab), its busy count, and t
 `~/.ultimate/tailscale.json`. The page polls `overview` every 30 s, every 3 s while a project starts or stops. `folders` lists the
 roots on demand when Add project opens.
 
-The target of **Open** shows its conversation even when it was last left on Projects (`#projects-open`, or
-`#projects-open:<message>` for a question: it finds the asking response with messages' `caller` action and scrolls to
-`[data-message-outgoing=<message>]`).
+A question opens as `?inbox=<message>`, which the inbox extension turns into its surface at that item (and wins over
+wherever the project was left); this project's own questions use its `inbox:open {message}` event instead. A row
+without a question opens with `#projects-open`, so the target shows its conversation even when it was last left on
+Projects, which it usually was: that is how you got here.
 
 "new answer" uses the `ext.conversations.seen` the user's last browser left in that project, so it can lag behind the
 browser tab's own dot.

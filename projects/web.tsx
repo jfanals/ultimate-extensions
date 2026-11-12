@@ -26,21 +26,21 @@ import {
   formatAgo,
   Header,
   plural,
+  provide,
   shortenPath,
   StatusLine,
-  useConversation,
   useDocOf,
-  useEvent,
   useNow,
   useSystem,
   useUltimate,
   useViewport,
 } from '@/sdk'
+import { UnderUltimate } from '@/../../extensions/sidebar/ui.tsx'
 import { tile } from '../project-icon/icon.ts'
 import { useOverrides } from '../project-icon/use-overrides.ts'
 import { looks } from '../tab-status/status.ts'
-import { arrival, projectUrl, questionLine, totals, validName } from './model.ts'
-import type { Folders, Overview, Row, RowState, Waiting } from './model.ts'
+import { ARRIVAL, elsewhere, groups, projectUrl, questionLine, totals, validName } from './model.ts'
+import type { Folders, Overview, Row, RowState } from './model.ts'
 
 /** No arguments → every project on this machine with its instance's status (server.ts). */
 const OverviewAction = actionRef<null, Overview>('projects', 'overview')
@@ -110,122 +110,70 @@ const overview = (() => {
 
 const useOverview = () => useSyncExternalStore(overview.subscribe, overview.get)
 
-/** The messages extension's `board` document: only what finds the response that asked a question. */
-const BoardDoc = docRef<{
-  messages: { id: number; from: number | string; call?: string }[]
-}>('board')
-
-/** `{ conversation, call }` → the entry of the response that made tool call `call` (messages' `caller`). */
-const CallerAction = actionRef<{ conversation: number; call: string }, { entry?: number }>(
-  'messages',
-  'caller',
-)
-
-/** The question to scroll to once its conversation is shown and loaded. */
-let pendingReveal: { conversation: number; call: string; message: number } | undefined
-const REVEAL_EVENT = 'projects:reveal'
-
-/**
- * Show question `message` where it was asked: its conversation, scrolled to the response that asked it. Returns false
- * when the board does not know it (answered meanwhile).
- */
-function useOpenQuestion() {
-  const board = useDocOf(1, BoardDoc)
-  const { showSurface, switchConversation } = useUltimate()
-  return (message: number) => {
-    const asked = board?.messages.find((item) => item.id === message)
-    if (typeof asked?.from !== 'number') return false
-    if (asked.call) {
-      pendingReveal = { conversation: asked.from, call: asked.call, message }
-      events.emit(REVEAL_EVENT, null)
-    }
-    showSurface('agent')
-    switchConversation(asked.from)
-    return true
-  }
-}
-
-/**
- * Scrolls to the pending question once its conversation is on screen and loaded; the transcript pages older history in
- * when the entry is not loaded yet.
- */
-function Reveal() {
-  const { id, loading } = useConversation()
-  const { surface } = useUltimate()
-  const [, rerender] = useState(0)
-  useEvent(REVEAL_EVENT, () => rerender((count) => count + 1))
-  const target = pendingReveal
-  useEffect(() => {
-    if (!target || surface !== 'agent' || id !== target.conversation || loading) return
-    pendingReveal = undefined
-    // Not cleared on re-render: the target is taken, and only these retries can still show it.
-    const { conversation, call, message } = target
-    api.action(CallerAction, { conversation, call }).then(
-      ({ entry }) => {
-        if (entry === undefined) return
-        // The transcript pages the asking response in; its question card (messages' `data-message-outgoing`) sits
-        // at its end, below what it says first. A freshly opened transcript still settles at its bottom after it
-        // loads, undoing an early scroll: try again until the card is on screen, for about five seconds at most.
-        let tries = 0
-        const reveal = () => {
-          const card = document.querySelector(`[data-message-outgoing="${message}"]`)
-          const top = card?.getBoundingClientRect().top
-          if (top !== undefined && top >= 0 && top < innerHeight / 2) return
-          if (card) card.scrollIntoView({ block: 'start' })
-          else
-            events.emit('ultimate:reveal-entry', {
-              conversationId: conversation,
-              entryId: entry,
-            })
-          if (++tries < 12) setTimeout(reveal, 400)
-        }
-        reveal()
-      },
-      // The conversation is shown either way; only the scroll to the question is lost.
-      () => undefined,
-    )
-  }, [target, surface, id, loading])
-  return null
-}
-
 /** The standing agents' conversations by name (subagents' `StandingDoc`): this project's @ultimate. */
 const StandingDoc = docRef<Record<string, number>>('ultimate.standing-agents')
 
 /**
- * Go to a project in this window, at a question when given; within this project, without a reload, to its @ultimate
- * when no question is given.
+ * Go to a project in this window: at `message` in its Inbox when given, else to its conversation. This project opens in
+ * place, without a reload: its Inbox through the inbox extension's `inbox:open` event, else its @ultimate.
  */
 function useNavigate() {
   const { showSurface, switchConversation } = useUltimate()
   const ultimate = useDocOf(1, StandingDoc)?.ultimate
-  const openQuestion = useOpenQuestion()
-  return (row: Row, question?: Pick<Waiting, 'conversation' | 'message'>) => {
-    if (row.current) {
-      if (question && openQuestion(question.message)) return
+  return (row: Row, message?: number) => {
+    if (!row.current) {
+      const url = projectUrl(location, row, message)
+      if (url) location.href = url
+    } else if (message !== undefined) events.emit('inbox:open', { message })
+    else {
       showSurface('agent')
       if (ultimate !== undefined) switchConversation(ultimate)
-      return
     }
-    const url = projectUrl(location, row, question)
-    if (url) location.href = url
   }
 }
 
-/** Arriving from another project's Projects: show the conversation (at the question), not where this project was left. */
+/**
+ * Arriving from another project's Projects without a question: show the conversation, not Projects, where the user
+ * last left this project to go there. A question arrives as `?inbox=<message>`, which the inbox extension handles.
+ */
 function Arrival() {
   const { showSurface } = useUltimate()
-  const board = useDocOf(1, BoardDoc)
-  const openQuestion = useOpenQuestion()
-  const [target, setTarget] = useState(() => arrival(location.hash))
   useEffect(() => {
-    if (!target) return
-    // A question waits for the board to load; one answered meanwhile leaves just its conversation shown.
-    if (target.message !== undefined && !board) return
-    if (target.message === undefined || !openQuestion(target.message)) showSurface('agent')
+    if (location.hash !== ARRIVAL) return
+    showSurface('agent')
     history.replaceState(history.state, '', location.pathname + location.search)
-    setTarget(undefined)
-  }, [target, board, openQuestion, showSurface])
+  }, [showSurface])
   return null
+}
+
+/**
+ * The sidebar row under the Inbox's: amber `Elsewhere · 3 in a, b` while questions wait in other projects, absent
+ * otherwise. A click opens the oldest one in its project's Inbox.
+ */
+function useElsewhereRow() {
+  const { data } = useOverview()
+  const navigate = useNavigate()
+  const waiting = data && elsewhere(data.rows)
+  if (!waiting) return null
+  const { row, question } = waiting.oldest
+  return (
+    <button
+      className="mx-2 flex w-[calc(100%-1rem)] cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-2 pl-9 text-left outline-none hover:bg-sidebar-accent/50 focus-visible:ring-1 focus-visible:ring-ring"
+      data-projects-elsewhere={waiting.count}
+      onClick={() => navigate(row, question.message)}
+      title={`${waiting.count} waiting on you ${waiting.where}. Opens the oldest, in ${row.name}'s Inbox.`}
+      type="button"
+    >
+      <LayersIcon className={cn('size-3 shrink-0', tones['needs-you'])} />
+      <span className={cn('shrink-0 font-mono text-[10.5px]', tones['needs-you'])}>
+        Elsewhere · {waiting.count}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-muted-foreground">
+        {waiting.where}
+      </span>
+      <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground/60" />
+    </button>
+  )
 }
 
 /** The status line's global counter: messages waiting on the user across every project. Opens Projects. */
@@ -513,7 +461,7 @@ function ProjectRow({
   const primary = running
     ? row.state === 'stopping'
       ? undefined
-      : () => navigate(row)
+      : () => navigate(row, groups([row])[0]?.questions[0].message)
     : stopped
       ? () => {
           commands.start(row)
@@ -522,13 +470,15 @@ function ProjectRow({
       : row.state === 'starting'
         ? () => commands.openWhenReady(row)
         : undefined
-  const label = row.current
-    ? `Open @ultimate in ${row.name}`
-    : running
-      ? `Open ${row.name}`
-      : stopped
-        ? `Start and open ${row.name}`
-        : `Open ${row.name} when ready`
+  const label = row.waiting.length
+    ? `Open ${row.name}'s Inbox at its oldest question`
+    : row.current
+      ? `Open @ultimate in ${row.name}`
+      : running
+        ? `Open ${row.name}`
+        : stopped
+          ? `Start and open ${row.name}`
+          : `Open ${row.name} when ready`
   // The phone row's swipe action: the one thing it does besides opening.
   const swiped = canStop
     ? { text: 'Stop', run: stop, tone: 'bg-amber-700 text-white' }
@@ -742,6 +692,7 @@ function Projects() {
     navigate(row)
   }, [awaited, data, navigate])
   const sum = data ? totals(data.rows) : undefined
+  const waiting = data ? groups(data.rows) : []
   return (
     <>
       <Header>
@@ -847,37 +798,75 @@ function Projects() {
             )}
           </div>
         </section>
-        {sum && sum.questions.length > 0 && (
+        {waiting.length > 0 && (
           <section className="mx-auto max-w-4xl px-3 pb-6 md:px-5">
-            <div className="py-1.5 section-label">Waiting on you, oldest first</div>
-            <ul className="divide-y divide-border/50 rounded-lg border border-border/70 bg-card/40">
-              {sum.questions.map((question) => (
-                <li key={`${question.project.root}:${question.message}`}>
-                  <button
-                    className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent/50"
-                    data-question={question.message}
-                    onClick={() => navigate(question.project, question)}
-                    type="button"
-                  >
-                    <span className="shrink-0 font-mono text-[11.5px] text-amber-700 dark:text-amber-300">
-                      {question.project.name}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[13px]">
-                      {questionLine(question.text)}
-                    </span>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground/70">
-                      {formatAgo(question.at, now, { ago: true })}
-                    </span>
-                    <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  </button>
-                </li>
+            <div className="py-1.5 section-label">Waiting on you, by project</div>
+            <div className="space-y-3">
+              {waiting.map(({ row, questions }) => (
+                <QuestionGroup
+                  key={row.root}
+                  now={now}
+                  onOpen={(message) => navigate(row, message)}
+                  questions={questions}
+                  row={row}
+                />
               ))}
-            </ul>
+            </div>
           </section>
         )}
       </main>
       <StatusLine />
     </>
+  )
+}
+
+/** One project's waiting questions, oldest first, under its tile and name; each opens that project's Inbox at it. */
+function QuestionGroup({
+  row,
+  questions,
+  now,
+  onOpen,
+}: {
+  row: Row
+  questions: Row['waiting']
+  now: number
+  onOpen: (message: number) => void
+}) {
+  const override = useOverrides()[row.name]
+  return (
+    <div className="rounded-lg border border-border/70 bg-card/40" data-question-group={row.name}>
+      <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
+        <img alt="" className="size-[18px] shrink-0" src={tile(row.name, { override })} />
+        <span className="truncate text-[13px] font-medium">{row.name}</span>
+        {row.current && (
+          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">this window</span>
+        )}
+        <span className={cn('ml-auto shrink-0 font-mono text-[11px]', tones['needs-you'])}>
+          {questions.length} waiting
+        </span>
+      </div>
+      <ul className="divide-y divide-border/50">
+        {questions.map((question) => (
+          <li key={question.message}>
+            <button
+              className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent/50"
+              data-question={question.message}
+              onClick={() => onOpen(question.message)}
+              title={`Open in ${row.name}'s Inbox`}
+              type="button"
+            >
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                {questionLine(question.text)}
+              </span>
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/70">
+                {formatAgo(question.at, now, { ago: true })}
+              </span>
+              <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -1120,8 +1109,9 @@ function AddProject({
 export default defineWebExtension({
   slots: {
     'statusline.right': [{ component: Counter, order: -4, phone: true }],
-    overlay: [Arrival, Reveal],
+    overlay: [Arrival],
   },
+  provides: [provide(UnderUltimate, useElsewhereRow)],
   surfaces: [
     {
       id: 'projects',

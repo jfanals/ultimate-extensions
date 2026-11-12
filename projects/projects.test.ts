@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { arrival, ordered, projectUrl, rowState, STARTING_MS, startEnv, totals } from './model.ts'
+import {
+  elsewhere,
+  groups,
+  ordered,
+  projectUrl,
+  rowState,
+  STARTING_MS,
+  startEnv,
+  totals,
+} from './model.ts'
 import type { Row } from './model.ts'
 
 const row = (
@@ -22,7 +31,7 @@ const row = (
   })),
 })
 
-test('totals count waiting messages and their projects, and list questions oldest first', () => {
+test('totals count waiting messages, their projects and the working ones', () => {
   const sum = totals([
     row('a', [30, 10], 'needs-you'),
     row('b', []),
@@ -32,10 +41,28 @@ test('totals count waiting messages and their projects, and list questions oldes
   assert.equal(sum.waiting, 3)
   assert.equal(sum.projects, 2)
   assert.equal(sum.working, 1)
+})
+
+test('questions group by project, oldest first in each, the project waiting longest first', () => {
+  const grouped = groups([row('a', [30, 25]), row('b', []), row('c', [20, 40])])
   assert.deepEqual(
-    sum.questions.map((question) => question.text),
-    ['a 10', 'c 20', 'a 30'],
+    grouped.map((group) => [group.row.name, group.questions.map((question) => question.at)]),
+    [
+      ['c', [20, 40]],
+      ['a', [25, 30]],
+    ],
   )
+})
+
+test('Elsewhere counts only other projects, names up to two, and opens the oldest', () => {
+  assert.equal(elsewhere([row('here', [5], 'needs-you', true), row('b', [])]), undefined)
+  const two = elsewhere([row('here', [5], 'needs-you', true), row('b', [30]), row('c', [10, 40])])
+  assert.deepEqual(two && { ...two, oldest: [two.oldest.row.name, two.oldest.question.at] }, {
+    count: 3,
+    where: 'in c, b',
+    oldest: ['c', 10],
+  })
+  assert.equal(elsewhere([row('b', [1]), row('c', [2]), row('d', [3])])?.where, 'in 3 projects')
 })
 
 test("a row's state: the instance's own status, else stopped, starting or not answering", () => {
@@ -55,22 +82,19 @@ test('the current project comes first, then by name', () => {
   )
 })
 
-test('a project opens on the tailnet port over HTTPS, else on its local port', () => {
-  const ports = { port: 5048, tailnetPort: 5048 }
+test("a question opens in its project's Inbox, on the tailnet port over HTTPS, else on its local port", () => {
+  const ports = { port: 5048, tailnetPort: 5049 }
   assert.equal(
-    projectUrl(
-      { protocol: 'http:', hostname: 'localhost' },
-      { port: 5050 },
-      { conversation: 40, message: 7 },
-    ),
-    'http://localhost:5050/?conversation=40#projects-open:7',
+    projectUrl({ protocol: 'http:', hostname: 'localhost' }, ports, 7),
+    'http://localhost:5048/?inbox=7',
   )
-  assert.deepEqual(arrival('#projects-open:7'), { message: 7 })
-  assert.deepEqual(arrival('#projects-open'), {})
-  assert.equal(arrival('#other'), undefined)
+  assert.equal(
+    projectUrl({ protocol: 'https:', hostname: 'laptop.example.com' }, ports, 7),
+    'https://laptop.example.com:5049/?inbox=7',
+  )
   assert.equal(
     projectUrl({ protocol: 'https:', hostname: 'laptop.example.com' }, ports),
-    'https://laptop.example.com:5048/#projects-open',
+    'https://laptop.example.com:5049/#projects-open',
   )
   assert.equal(
     projectUrl({ protocol: 'https:', hostname: 'laptop.example.com' }, { port: 5051 }),
