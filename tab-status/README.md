@@ -47,8 +47,8 @@ git -C ~/ultimate-extensions pull                                               
 rm ~/.ultimate/extensions/tab-status                                              # uninstall
 ```
 
-Ultimate picks up each change live; no restart. The [projects](../projects/) extension imports `status.ts` from this
-folder, so keep tab-status in the clone while projects is installed (it need not be linked).
+Ultimate picks up each change live; no restart. The [fleet](../fleet/) extension imports `status.ts` from this
+folder, so keep tab-status in the clone while fleet is installed (it need not be linked).
 
 ## How it works
 

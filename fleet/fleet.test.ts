@@ -63,9 +63,9 @@ test("the Inbox gets every other project's questions, keyed by project and messa
   assert.deepEqual(
     items.map((item) => [item.key, item.question.at]),
     [
-      ['projects:b:1', 30],
-      ['projects:c:1', 10],
-      ['projects:c:2', 40],
+      ['fleet:b:1', 30],
+      ['fleet:c:1', 10],
+      ['fleet:c:2', 40],
     ],
   )
 })
@@ -99,7 +99,7 @@ test("a question opens in its project's Inbox, on the tailnet port over HTTPS, e
   )
   assert.equal(
     projectUrl({ protocol: 'https:', hostname: 'laptop.example.com' }, ports),
-    'https://laptop.example.com:5049/#projects-open',
+    'https://laptop.example.com:5049/#fleet-open',
   )
   assert.equal(
     projectUrl({ protocol: 'https:', hostname: 'laptop.example.com' }, { port: 5051 }),

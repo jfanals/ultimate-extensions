@@ -1,4 +1,4 @@
-/** The Projects overview's shapes and the pure rules behind it: row state, totals, links. Browser-safe. */
+/** The Fleet overview's shapes and the pure rules behind it: row state, totals, links. Browser-safe. */
 import type { TabStatus } from '../tab-status/status.ts'
 
 /** One question a message asks, as messages stores it (`extensions/messages/refs.ts` `Question`). */
@@ -23,7 +23,7 @@ export type Waiting = {
   images?: number
 }
 
-/** What one instance says about itself (`projects/here`). */
+/** What one instance says about itself (`fleet/here`). */
 export type Here = { status: TabStatus; busy: number; waiting: Waiting[] }
 
 /** A row's state: an instance's own status, or why there is none. */
@@ -117,7 +117,7 @@ export const groups = (rows: readonly Row[]) =>
     .toSorted((a, b) => a.questions[0].at - b.questions[0].at)
 
 /** The Inbox key of question `message` waiting in project `name`. */
-export const itemKey = (name: string, message: number) => `projects:${name}:${message}`
+export const itemKey = (name: string, message: number) => `fleet:${name}:${message}`
 
 /**
  * The questions waiting in the other projects, for this project's Inbox: each with its key, its project's row and the
@@ -137,8 +137,8 @@ export const ordered = (rows: readonly Row[]) =>
 /**
  * Where a project opens from this page: same protocol and host, the project's port. Over the tailnet (HTTPS) that is its
  * tailnet port; on loopback or `ultimate.localhost` its local one. With `message`, at that item in its Inbox
- * (`?inbox=<message>`, the inbox extension's link). Without, `#projects-open` tells the target to show its conversation
- * even when it was last left on Projects.
+ * (`?inbox=<message>`, the inbox extension's link). Without, `#fleet-open` tells the target to show its conversation
+ * even when it was last left on Fleet.
  */
 export function projectUrl(
   page: { protocol: string; hostname: string },
@@ -150,8 +150,8 @@ export function projectUrl(
   return `${page.protocol}//${page.hostname}:${port}/${message === undefined ? ARRIVAL : `?inbox=${message}`}`
 }
 
-/** The hash a project opened from another project's Projects arrives with: show the conversation, not Projects. */
-export const ARRIVAL = '#projects-open'
+/** The hash a project opened from another project's Fleet arrives with: show the conversation, not Fleet. */
+export const ARRIVAL = '#fleet-open'
 
 /**
  * Whether `name` may be a new project's folder: one plain path segment of letters, digits, `.`, `_` and `-`, not
@@ -159,7 +159,7 @@ export const ARRIVAL = '#projects-open'
  */
 export const validName = (name: string) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)
 
-/** Without the `projects.roots` setting: the folders that hold the projects already on this machine. */
+/** Without the `fleet.roots` setting: the folders that hold the projects already on this machine. */
 export const defaultRoots = (projectRoots: readonly string[]) => [
   ...new Set(
     projectRoots

@@ -49,22 +49,22 @@ import { ARRIVAL, elsewhereItems, groups, itemKey, projectUrl, totals, validName
 import type { Folders, Overview, Row, RowState, Waiting } from './model.ts'
 
 /** No arguments → every project on this machine with its instance's status (server.ts). */
-const OverviewAction = actionRef<null, Overview>('projects', 'overview')
+const OverviewAction = actionRef<null, Overview>('fleet', 'overview')
 /** `{ root }` of a stopped project → `{ started }`. */
-const StartAction = actionRef<{ root: string }, { started: string }>('projects', 'start')
+const StartAction = actionRef<{ root: string }, { started: string }>('fleet', 'start')
 /** `{ root }` of a running project other than this one → `{ stopping }`. */
-const StopAction = actionRef<{ root: string }, { stopping: string }>('projects', 'stop')
+const StopAction = actionRef<{ root: string }, { stopping: string }>('fleet', 'stop')
 /** No arguments → the roots and the folders in them that are not projects yet. */
-const FoldersAction = actionRef<null, Folders>('projects', 'folders')
+const FoldersAction = actionRef<null, Folders>('fleet', 'folders')
 /** `{ path }` of a folder that is not a project yet → `{ started }`. */
-const OpenAction = actionRef<{ path: string }, { started: string }>('projects', 'open')
+const OpenAction = actionRef<{ path: string }, { started: string }>('fleet', 'open')
 /** `{ name, root }` → a new folder with git, started: `{ started, root }`. */
 const CreateAction = actionRef<{ name: string; root: string }, { started: string; root: string }>(
-  'projects',
+  'fleet',
   'create',
 )
-const HideAction = actionRef<{ root: string }, Record<string, never>>('projects', 'hide')
-const UnhideAction = actionRef<{ root: string }, Record<string, never>>('projects', 'unhide')
+const HideAction = actionRef<{ root: string }, Record<string, never>>('fleet', 'hide')
+const UnhideAction = actionRef<{ root: string }, Record<string, never>>('fleet', 'unhide')
 
 const button =
   'h-7 cursor-pointer rounded-md px-2.5 whitespace-nowrap text-foreground hover:bg-accent disabled:cursor-default disabled:opacity-40'
@@ -141,7 +141,7 @@ function useNavigate() {
 }
 
 /**
- * Arriving from another project's Projects without a question: show the conversation, not Projects, where the user
+ * Arriving from another project's Fleet without a question: show the conversation, not Fleet, where the user
  * last left this project to go there. A question arrives as `?inbox=<message>`, which the inbox extension handles.
  */
 function Arrival() {
@@ -225,7 +225,7 @@ function ElsewherePane({ row, question }: { row: Row; question: Waiting }) {
       )}
       {url && (
         <Button asChild size="sm">
-          <a data-projects-answer={question.message} href={url}>
+          <a data-fleet-answer={question.message} href={url}>
             <ExternalLinkIcon className="size-3.5" />
             Answer in {row.name}
           </a>
@@ -235,7 +235,7 @@ function ElsewherePane({ row, question }: { row: Row; question: Waiting }) {
   )
 }
 
-/** The status line's global counter: messages waiting on the user across every project. Opens Projects. */
+/** The status line's global counter: messages waiting on the user across every project. Opens Fleet. */
 function Counter() {
   const { data } = useOverview()
   const { showSurface } = useUltimate()
@@ -247,9 +247,9 @@ function Counter() {
         '-mx-1 flex cursor-pointer items-center gap-1.5 rounded-sm px-1 transition-colors hover:bg-accent hover:text-foreground',
         waiting > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-muted-foreground/60',
       )}
-      data-projects-waiting={waiting}
-      onClick={() => showSurface('projects')}
-      title="Messages waiting on you across every project on this machine. Opens Projects."
+      data-fleet-waiting={waiting}
+      onClick={() => showSurface('fleet')}
+      title="Messages waiting on you across every project on this machine. Opens Fleet."
       type="button"
     >
       <span aria-hidden>◆</span>
@@ -457,7 +457,7 @@ function ActionSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end bg-black/50 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-      data-projects-sheet
+      data-fleet-sheet
       onClick={onClose}
       role="presentation"
     >
@@ -717,7 +717,7 @@ function ProjectRow({
 }
 
 /** Every Ultimate project on this machine and what each needs; their waiting questions are in the Inbox. */
-function Projects() {
+function Fleet() {
   const { data, error } = useOverview()
   const navigate = useNavigate()
   const [startError, setStartError] = useState<string>()
@@ -755,7 +755,7 @@ function Projects() {
       <Header>
         <span className="flex items-center gap-2 text-[13px] font-medium">
           <LayersIcon className="size-4 text-muted-foreground" />
-          Projects
+          Fleet
         </span>
       </Header>
       <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
@@ -787,7 +787,7 @@ function Projects() {
                   {!adding && (
                     <button
                       className="flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border/70 px-2 text-foreground hover:bg-accent"
-                      data-projects-add
+                      data-fleet-add
                       onClick={() => setAdding(true)}
                       type="button"
                     >
@@ -930,7 +930,7 @@ function AddProject({
   const field =
     'h-8 w-full min-w-0 rounded-md border border-border/70 bg-background/50 px-2.5 font-mono text-[12px] text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-violet-400/60'
   return (
-    <div className="rounded-lg border border-border/70 bg-card/40" data-projects-add-panel>
+    <div className="rounded-lg border border-border/70 bg-card/40" data-fleet-add-panel>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 px-3 py-2 font-mono text-[11px] text-muted-foreground">
         <span className="section-label">Add project</span>
         <span className="ml-auto flex items-center gap-2">
@@ -954,7 +954,7 @@ function AddProject({
         </p>
       ) : folders.roots.length === 0 ? (
         <p className="px-3 py-3 font-mono text-[11.5px] text-muted-foreground">
-          No projects root: add <code>"projects": {'{ "roots": ["~/code"] }'}</code> to
+          No fleet root: add <code>"fleet": {'{ "roots": ["~/code"] }'}</code> to
           ~/.ultimate/settings.json.
         </p>
       ) : mode === 'open' ? (
@@ -1105,19 +1105,19 @@ export default defineWebExtension({
   provides: [provide(InboxItems, useElsewhereItems)],
   surfaces: [
     {
-      id: 'projects',
-      title: 'Projects',
+      id: 'fleet',
+      title: 'Fleet',
       icon: LayersIcon,
       description: 'Every Ultimate project on this machine, and what waits on you across them',
       order: 40,
-      component: Projects,
+      component: Fleet,
     },
   ],
   commands: [
     {
-      id: 'projects.open',
-      title: 'Open Projects',
-      run: (context) => context.showSurface('projects'),
+      id: 'fleet.open',
+      title: 'Open Fleet',
+      run: (context) => context.showSurface('fleet'),
     },
   ],
 })

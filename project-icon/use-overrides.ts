@@ -1,4 +1,4 @@
-/** The `projectIcon` overrides in the browser, for tab-status's favicon and the Projects rows. */
+/** The `projectIcon` overrides in the browser, for tab-status's favicon and the Fleet rows. */
 import { useSyncExternalStore } from 'react'
 import { actionRef, api } from '@/sdk'
 import type { Overrides } from './icon.ts'

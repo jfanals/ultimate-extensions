@@ -50,13 +50,13 @@ const QuestionAction = actionRef<{ project: string; message: number }, { text: s
   'drive',
   'question',
 )
-/** The projects extension's `overview`: every project's state and the messages waiting on the user (`projects/model.ts`). */
+/** The fleet extension's `overview`: every project's state and the messages waiting on the user (`fleet/model.ts`). */
 const OverviewAction = actionRef<
   null,
   {
     rows: { name: string; current: boolean; waiting: { message: number; text: string }[] }[]
   }
->('projects', 'overview')
+>('fleet', 'overview')
 /** How often the shown screen looks for other projects' new questions. */
 const OTHERS_MS = 20_000
 /** voice's `transcribe`: `{ audio, mimeType }` (base64) → `{ text }`, through `voice.transcriptionUrl` or OpenAI. */
@@ -278,7 +278,7 @@ function useNews(main: number, say: (utterance: Utterance) => void) {
 }
 
 /**
- * Other projects' new questions to the user, read aloud with the project's name, from the projects extension's overview
+ * Other projects' new questions to the user, read aloud with the project's name, from the fleet extension's overview
  * (nothing without it). Returns the ones still open there, as `project:message`.
  */
 function useOtherQuestions(say: (utterance: Utterance) => void) {
@@ -289,7 +289,7 @@ function useOtherQuestions(say: (utterance: Utterance) => void) {
     let seen: Set<string> | undefined
     let gone = false
     const look = async () => {
-      // Without the projects extension there is nothing to hear; a failed poll is asked again next time.
+      // Without the fleet extension there is nothing to hear; a failed poll is asked again next time.
       const overview = await api.action(OverviewAction).catch(() => undefined)
       if (!overview || gone) return
       const waiting = overview.rows

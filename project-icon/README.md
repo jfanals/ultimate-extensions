@@ -2,11 +2,11 @@
 
 Gives each project its own tile, two initials on a colour picked from the project's name, so several Ultimate tabs
 or app windows can be told apart at a glance. [tab-status](../tab-status/) draws it as the browser tab's favicon (with
-its status dot) and [projects](../projects/) shows it on each row of the Projects tab.
+its status dot) and [fleet](../fleet/) shows it on each row of the Fleet tab.
 
 ## Requirements
 
-None beyond Ultimate. On its own it shows nothing: install tab-status, projects or both.
+None beyond Ultimate. On its own it shows nothing: install tab-status, fleet or both.
 
 ## What it draws
 
@@ -42,7 +42,7 @@ git -C ~/ultimate-extensions pull                                               
 rm ~/.ultimate/extensions/project-icon                                            # uninstall
 ```
 
-Ultimate picks up each change live; no restart. tab-status and projects import `icon.ts` and `use-overrides.ts`
+Ultimate picks up each change live; no restart. tab-status and fleet import `icon.ts` and `use-overrides.ts`
 from this folder, so keep it in the clone while either is installed. Without its link the tiles still show, in the
 colours from their names, but the setting is not read.
 

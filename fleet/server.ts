@@ -110,7 +110,7 @@ async function here(host: Host): Promise<Here> {
 /** Another instance's `here`, over loopback with its own origin, as every instance admits. */
 async function ask(url: string, signal: AbortSignal): Promise<{ here: Here } | { error: string }> {
   try {
-    const response = await fetch(`${url}/api/extensions/projects/actions/here`, {
+    const response = await fetch(`${url}/api/extensions/fleet/actions/here`, {
       method: 'POST',
       headers: {
         Origin: new URL(url).origin,
@@ -156,7 +156,7 @@ async function tailnetPorts(host: Host): Promise<Record<string, number>> {
   )
 }
 
-export default defineExtension({ name: 'projects' })
+export default defineExtension({ name: 'fleet' })
 
 export const pollActions = ['here', 'overview']
 export const userActions = ['start', 'stop', 'open', 'create', 'hide', 'unhide']
@@ -277,7 +277,7 @@ export const actions = {
     })
     if (!(await stat(real)).isDirectory()) throw new Error(`${path} is not a folder`)
     if (!roots.some((root) => real.startsWith(root + sep)))
-      throw new Error(`${path} is not inside a projects root`)
+      throw new Error(`${path} is not inside a fleet root`)
     const project = projects.find((item) => item.root === real)
     if (project) throw new Error(`${project.name} is already a project; Start it from its row`)
     return { started: await startRoot(host, real) }
@@ -296,7 +296,7 @@ export const actions = {
       projects.flatMap((project) => project.root ?? []),
     )
     if (typeof root !== 'string' || !roots.includes(root))
-      throw new Error('Expected { root } of a projects root')
+      throw new Error('Expected { root } of a fleet root')
     const path = join(root, name)
     // Not recursive: it fails when the folder exists, so nothing of an existing folder is touched.
     await mkdir(path).catch((error: NodeJS.ErrnoException) => {
@@ -382,15 +382,15 @@ async function startRoot(host: Host, root: string) {
 }
 
 /**
- * The roots new projects come from, resolved: `projects.roots` in `~/.ultimate/settings.json` (`~/` for the home),
+ * The roots new projects come from, resolved: `fleet.roots` in `~/.ultimate/settings.json` (`~/` for the home),
  * else the folders holding the projects already on this machine. Missing folders are dropped.
  */
 async function rootsOf(host: Host, projectRoots: string[]) {
   // A missing or invalid settings file (reported where settings load) counts as unset here.
   const settings = (await readFile(join(host.userHome, '.ultimate/settings.json'), 'utf8')
     .then(JSON.parse)
-    .catch(() => ({}))) as { projects?: { roots?: unknown } } | null
-  const configured = settings?.projects?.roots
+    .catch(() => ({}))) as { fleet?: { roots?: unknown } } | null
+  const configured = settings?.fleet?.roots
   const roots = Array.isArray(configured)
     ? configured
         .filter((root): root is string => typeof root === 'string')
@@ -415,9 +415,9 @@ async function folder(root: string, path: string): Promise<Folder> {
   return { name, path, root, git, at: (head ?? own)?.mtimeMs ?? 0 }
 }
 
-const hiddenPath = (host: Host) => join(host.userHome, '.ultimate/projects-hidden.json')
+const hiddenPath = (host: Host) => join(host.userHome, '.ultimate/fleet-hidden.json')
 
-/** The roots of hidden projects, from `~/.ultimate/projects-hidden.json`. */
+/** The roots of hidden projects, from `~/.ultimate/fleet-hidden.json`. */
 async function hiddenList(host: Host): Promise<string[]> {
   // No file yet: nothing is hidden.
   const value: unknown = await readFile(hiddenPath(host), 'utf8')
