@@ -71,6 +71,14 @@ test("@ultimate's no-reply message is a report with its bold lead; other message
     url_title: 'Open conversation',
     ttl: 86_400,
   })
+  const plain = {
+    ...report,
+    text: 'Fixed `read` filling; see [org/app#158](https://example.com/158).',
+  }
+  assert.equal(
+    reportNote('chess', plain, 3, ORIGIN)?.message,
+    'Fixed read filling; see org/app#158.',
+  )
   assert.equal(reportNote('chess', { ...report, from: 7 }, 3, ORIGIN), undefined)
   assert.equal(reportNote('chess', { ...report, reply: true }, 3, ORIGIN), undefined)
   assert.equal(questionNote('chess', report, '@ultimate', ORIGIN), undefined)

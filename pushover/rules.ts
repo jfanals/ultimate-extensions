@@ -31,11 +31,13 @@ const DAY = 86_400
 /** Pushover's limits: 250 characters of title, 1024 of message. */
 const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
-/** The first non-empty line, without Markdown emphasis. */
+/** The first non-empty line as plain text: Pushover shows Markdown as typed. */
 const firstLine = (text: string) =>
   (
     text
       .replaceAll('**', '')
+      .replaceAll('`', '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
       .split('\n')
       .find((line) => line.trim()) ?? ''
   ).trim()
