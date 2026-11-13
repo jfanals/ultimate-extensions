@@ -112,7 +112,6 @@ test('questions within a minute of the first go out together once; a repeated on
     mock.timers.tick(WINDOW_MS - 30_000)
     assert.deepEqual(sent, [[1, 2, 3]])
     window.add(4, 4)
-    window.flush()
     mock.timers.tick(WINDOW_MS)
     assert.deepEqual(sent, [[1, 2, 3], [4]])
   } finally {

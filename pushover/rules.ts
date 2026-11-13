@@ -128,25 +128,25 @@ export function batched(project: string, notes: Note[], origin: string): Note | 
 }
 
 /**
- * Gathers items for `ms` from the first one, then hands them to `flush` together; an item added again under the same
- * key (a retried reactor transaction) counts once. `flush` hands over what waits now, as on a reload.
+ * Gathers items for `ms` from the first one, then hands them to `send` together; an item added again under the same
+ * key (a retried reactor transaction) counts once. A window still open when the process exits is dropped.
  */
 export function gather<T>(send: (items: T[]) => void, ms = WINDOW_MS) {
   let items = new Map<number, T>()
   let timer: ReturnType<typeof setTimeout> | undefined
   const flush = () => {
-    if (timer) clearTimeout(timer)
     timer = undefined
     const due = [...items.values()]
     items = new Map()
-    if (due.length) send(due)
+    send(due)
   }
   return {
     add(key: number, item: T) {
       items.set(key, item)
+      // A window never keeps the process alive.
       timer ??= setTimeout(flush, ms)
+      timer.unref?.()
     },
-    flush,
   }
 }
 

@@ -2,11 +2,12 @@
  * Pushover: each project sends its own questions to the user, landings and @ultimate's reports to the user's phone
  * through Pushover, unless the user is on an Ultimate page. Reacts as Ultimate's `push` does (`extensions/push`).
  */
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context'
 import { defineExtension, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
 // Ultimate's own modules, from the clone (`@` is its web/src).
+import { writeJson } from '@/../../lib/json-file.ts'
 import { readSecret } from '@/../../lib/secrets.ts'
 import type { ExtensionHost } from '@/../../server/extensions.ts'
 import { Messages, MessageSent } from '@/../../extensions/messages/api.ts'
@@ -100,8 +101,17 @@ export default function pushover(host: ExtensionHost) {
     sending.add(tracked)
   }
 
+  // The window outlives a reload, so a question before and one after it still go out together; whichever facet is
+  // loaded when it ends sends them. One the process exits with is skipped, as the design allows.
+  const questions = host.resource('pushover.questions', () => {
+    const shared = {
+      send: undefined as ((gathered: (Note & { id: number })[]) => void) | undefined,
+      window: gather<Note & { id: number }>((gathered) => shared.send?.(gathered)),
+    }
+    return shared
+  })
   /** The window's questions still waiting on the user, as one notification. */
-  const questions = gather<Note & { id: number }>((gathered) =>
+  const send = (gathered: (Note & { id: number })[]) =>
     track(
       (async () => {
         const board = await host.harness().snapshot(Messages, ROOT_CONVERSATION_ID, context)
@@ -113,8 +123,8 @@ export default function pushover(host: ExtensionHost) {
         const note = batched(project(host), open, origin(host))
         if (note) await deliver(host, note)
       })(),
-    ),
-  )
+    )
+  questions.send = send
 
   host.react(
     'messages',
@@ -126,7 +136,7 @@ export default function pushover(host: ExtensionHost) {
       )
       if (!message) return
       const made = noteOf(host, message, await tx.doc(Standing, ROOT_CONVERSATION_ID))
-      if (made?.question) questions.add(message.id, { ...made.note, id: message.id })
+      if (made?.question) questions.window.add(message.id, { ...made.note, id: message.id })
       else if (made) track(deliver(host, made.note))
     },
     { from: 'now' },
@@ -145,9 +155,9 @@ export default function pushover(host: ExtensionHost) {
     told.missing = true
     host.notice(MISSING)
   })
-  // A reload or shutdown sends what the window gathered so far rather than dropping it.
   const close = async () => {
-    questions.flush()
+    // A replacement facet may have taken over already.
+    if (questions.send === send) questions.send = undefined
     while (sending.size) await Promise.all(sending)
   }
   host.onRelease(close)
@@ -159,7 +169,8 @@ export const userActions = ['present']
 export const actions = {
   /** No arguments: a page in use says the user is here, for every project on this machine. */
   present: async (_args: unknown, { host }: { host: ExtensionHost }) => {
-    await writeFile(presenceFile(host), JSON.stringify({ at: Date.now() }))
+    // Atomically: a half-written file would read as the user being away.
+    await writeJson(presenceFile(host), { at: Date.now() })
     return null
   },
   /**
