@@ -21,6 +21,7 @@ imports it from the clone (its README says which files it follows).
 | [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
 | [todos-badge](todos-badge/)   | The To-dos tab counts what waits on you: amber while a question does, grey for only your to-dos.   |
 | [secret-keys](secret-keys/)   | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
+| [pushover](pushover/)         | Pushover notifications for questions, landings and @ultimate's reports while you are away.         |
 
 ## Install
 
@@ -56,6 +57,8 @@ No restart: Ultimate reloads an extension when its files change.
 - **todos-badge** needs an Ultimate whose web SDK has `panelBadges`; on an older one it loads and shows nothing.
 - **secret-keys** uses Ultimate's Secrets extension; link its `ultimate-secret` script onto your PATH to read values
   from scripts and configs.
+- **pushover** needs a Pushover account and its two keys in Secrets; links reach your phone through Ultimate's
+  tailscale extension.
 - **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
 
 The others stand alone. Each README lists its requirements, settings and tests.
@@ -66,7 +69,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts
+node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts projects/projects.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts pushover/rules.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
