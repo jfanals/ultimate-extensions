@@ -14,7 +14,7 @@ import {
   startEnv,
   validName,
 } from './model.ts'
-import type { Folder, Folders, Here, Overview, Row, Waiting } from './model.ts'
+import type { Folder, Folders, Here, Overview, Question, Row, Waiting } from './model.ts'
 
 const run = promisify(execFile)
 
@@ -59,10 +59,22 @@ const started = new Map<string, number>()
 /** When Stop ran, by root: a row shows stopping until its instance lets go of its lock (this process only). */
 const stopping = new Map<string, number>()
 
-/** This instance's own status, by tab-status's rules, and the messages waiting on the user. */
+/** The Messages log's fields a waiting question shows in another project's Inbox. */
+type Log = {
+  messages: {
+    id: number
+    text: string
+    questions?: Question[]
+    images?: { count: number }
+  }[]
+}
+
+/** This instance's own status, by tab-status's rules, and the messages waiting on the user, whole. */
 async function here(host: Host): Promise<Here> {
   const overview = host.doc('ultimate.conversation-overview')
-  const [waiting, ui, runs] = await Promise.all([
+  // The Messages log by kind, as `messages/refs.ts` `MessagesDoc` names it.
+  const board = host.doc('board')
+  const [asked, ui, runs, log] = await Promise.all([
     host.need(MessagesApi).openQuestions(context),
     host.uiState(context),
     overview
@@ -70,7 +82,18 @@ async function here(host: Host): Promise<Here> {
           conversations?: Record<string, { runState?: string }>
         } | null>)
       : undefined,
+    board ? (host.harness().snapshot(board, 1, context) as Promise<Log | null>) : undefined,
   ])
+  const waiting = asked.map((item): Waiting => {
+    const message = log?.messages.find((candidate) => candidate.id === item.message)
+    if (!message) return item
+    return {
+      ...item,
+      text: message.text,
+      ...(message.questions?.length ? { questions: message.questions } : {}),
+      ...(message.images?.count ? { images: message.images.count } : {}),
+    }
+  })
   const conversations = host.conversations()
   const status = tabStatus({
     conversations,

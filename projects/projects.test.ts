@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  elsewhere,
+  elsewhereItems,
   groups,
   ordered,
   projectUrl,
@@ -54,15 +54,20 @@ test('questions group by project, oldest first in each, the project waiting long
   )
 })
 
-test('Elsewhere counts only other projects, names up to two, and opens the oldest', () => {
-  assert.equal(elsewhere([row('here', [5], 'needs-you', true), row('b', [])]), undefined)
-  const two = elsewhere([row('here', [5], 'needs-you', true), row('b', [30]), row('c', [10, 40])])
-  assert.deepEqual(two && { ...two, oldest: [two.oldest.row.name, two.oldest.question.at] }, {
-    count: 3,
-    where: 'in c, b',
-    oldest: ['c', 10],
-  })
-  assert.equal(elsewhere([row('b', [1]), row('c', [2]), row('d', [3])])?.where, 'in 3 projects')
+test("the Inbox gets every other project's questions, keyed by project and message, and none of this one's", () => {
+  const items = elsewhereItems([
+    row('here', [5], 'needs-you', true),
+    row('b', [30]),
+    row('c', [10, 40]),
+  ])
+  assert.deepEqual(
+    items.map((item) => [item.key, item.question.at]),
+    [
+      ['projects:b:1', 30],
+      ['projects:c:1', 10],
+      ['projects:c:2', 40],
+    ],
+  )
 })
 
 test("a row's state: the instance's own status, else stopped, starting or not answering", () => {

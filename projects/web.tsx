@@ -1,9 +1,11 @@
 import {
   ChevronRightIcon,
   EllipsisIcon,
+  ExternalLinkIcon,
   FolderIcon,
   LayersIcon,
   LoaderCircleIcon,
+  MessageCircleQuestionIcon,
   PlusIcon,
   XIcon,
 } from 'lucide-react'
@@ -35,12 +37,16 @@ import {
   useUltimate,
   useViewport,
 } from '@/sdk'
-import { UnderUltimate } from '@/../../extensions/sidebar/ui.tsx'
+import { Button } from '@/components/ui/button'
+import { lead } from '@/../../extensions/inbox/items.tsx'
+import { InboxItems } from '@/../../extensions/inbox/ui.tsx'
+import type { InboxItem } from '@/../../extensions/inbox/ui.tsx'
+import { Body } from '@/../../extensions/messages/ui.tsx'
 import { tile } from '../project-icon/icon.ts'
 import { useOverrides } from '../project-icon/use-overrides.ts'
 import { looks } from '../tab-status/status.ts'
-import { ARRIVAL, elsewhere, groups, projectUrl, questionLine, totals, validName } from './model.ts'
-import type { Folders, Overview, Row, RowState } from './model.ts'
+import { ARRIVAL, elsewhereItems, groups, itemKey, projectUrl, totals, validName } from './model.ts'
+import type { Folders, Overview, Row, RowState, Waiting } from './model.ts'
 
 /** No arguments → every project on this machine with its instance's status (server.ts). */
 const OverviewAction = actionRef<null, Overview>('projects', 'overview')
@@ -114,18 +120,20 @@ const useOverview = () => useSyncExternalStore(overview.subscribe, overview.get)
 const StandingDoc = docRef<Record<string, number>>('ultimate.standing-agents')
 
 /**
- * Go to a project in this window: at `message` in its Inbox when given, else to its conversation. This project opens in
- * place, without a reload: its Inbox through the inbox extension's `inbox:open` event, else its @ultimate.
+ * Go to a project's question or the project itself. A question opens in this window's Inbox, without a reload: this
+ * project's own by its message, another's by its item (`elsewhereItems`). Without one, this project opens its
+ * @ultimate, another project its page.
  */
 function useNavigate() {
   const { showSurface, switchConversation } = useUltimate()
   const ultimate = useDocOf(1, StandingDoc)?.ultimate
   return (row: Row, message?: number) => {
-    if (!row.current) {
-      const url = projectUrl(location, row, message)
+    if (message !== undefined)
+      events.emit('inbox:open', row.current ? { message } : { key: itemKey(row.name, message) })
+    else if (!row.current) {
+      const url = projectUrl(location, row)
       if (url) location.href = url
-    } else if (message !== undefined) events.emit('inbox:open', { message })
-    else {
+    } else {
       showSurface('agent')
       if (ultimate !== undefined) switchConversation(ultimate)
     }
@@ -147,32 +155,83 @@ function Arrival() {
 }
 
 /**
- * The sidebar row under the Inbox's: amber `Elsewhere · 3 in a, b` while questions wait in other projects, absent
- * otherwise. A click opens the oldest one in its project's Inbox.
+ * The questions waiting in the other projects, as this project's Inbox items: tagged with their project, the whole text
+ * in the reading pane, and Answer in <project>, which opens that project's Inbox at the question.
  */
-function useElsewhereRow() {
+function useElsewhereItems(): InboxItem[] {
   const { data } = useOverview()
-  const navigate = useNavigate()
-  const waiting = data && elsewhere(data.rows)
-  if (!waiting) return null
-  const { row, question } = waiting.oldest
+  if (!data) return []
+  return elsewhereItems(data.rows).map(({ key, row, question }) => ({
+    key,
+    at: question.at,
+    tag: row.name,
+    title: lead(question.text).title,
+    ...(question.questions?.[0] ? { gist: question.questions[0].text } : {}),
+    pane: <ElsewherePane question={question} row={row} />,
+  }))
+}
+
+/** The reading pane of another project's question: the rest of its text, its questions, and where to answer it. */
+function ElsewherePane({ row, question }: { row: Row; question: Waiting }) {
+  const { body } = lead(question.text)
+  const url = projectUrl(location, row, question.message)
+  const questions = question.questions ?? []
   return (
-    <button
-      className="mx-2 flex w-[calc(100%-1rem)] cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-2 pl-9 text-left outline-none hover:bg-sidebar-accent/50 focus-visible:ring-1 focus-visible:ring-ring"
-      data-projects-elsewhere={waiting.count}
-      onClick={() => navigate(row, question.message)}
-      title={`${waiting.count} waiting on you ${waiting.where}. Opens the oldest, in ${row.name}'s Inbox.`}
-      type="button"
-    >
-      <LayersIcon className={cn('size-3 shrink-0', tones['needs-you'])} />
-      <span className={cn('shrink-0 font-mono text-[10.5px]', tones['needs-you'])}>
-        Elsewhere · {waiting.count}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-muted-foreground">
-        {waiting.where}
-      </span>
-      <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground/60" />
-    </button>
+    <div className="space-y-4">
+      {body && (
+        // Body's own card padding and 13px give way to the reading pane's prose, as the Inbox draws a question's.
+        <div className="[&>div]:px-0 [&>div]:py-0 [&>div]:text-[15px] [&>div]:leading-6">
+          <Body text={body} />
+        </div>
+      )}
+      {question.images ? (
+        <p className="font-mono text-[11.5px] text-muted-foreground">
+          {plural(question.images, 'image')} with it, shown in {row.name}
+        </p>
+      ) : null}
+      {questions.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border/70 bg-card/60">
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 font-mono text-[11px] text-muted-foreground">
+            <MessageCircleQuestionIcon className="size-3.5 text-brand" />
+            <span className="text-foreground">{plural(questions.length, 'question')}</span>
+          </div>
+          <ol className="space-y-3 px-3 pt-1 pb-3">
+            {questions.map((item, index) => (
+              <li className="text-[13px]" key={item.text}>
+                <span className="font-medium">
+                  {item.ref ?? index + 1}. {item.text}
+                </span>
+                {item.options && (
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                    {item.options.map((option, at) => (
+                      <li className="flex items-baseline gap-2" key={option.label}>
+                        <span className="font-mono text-[11px]">
+                          {option.key ?? String.fromCharCode(97 + at)}
+                        </span>
+                        <span className="text-foreground/90">{option.label}</span>
+                        {option.recommended && (
+                          <span className="rounded-full border border-brand/40 px-1.5 font-mono text-[10px] text-brand">
+                            my pick
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {url && (
+        <Button asChild size="sm">
+          <a data-projects-answer={question.message} href={url}>
+            <ExternalLinkIcon className="size-3.5" />
+            Answer in {row.name}
+          </a>
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -657,13 +716,12 @@ function ProjectRow({
   )
 }
 
-/** Every Ultimate project on this machine, what each needs, and the questions waiting on the user across them. */
+/** Every Ultimate project on this machine and what each needs; their waiting questions are in the Inbox. */
 function Projects() {
   const { data, error } = useOverview()
   const navigate = useNavigate()
   const [startError, setStartError] = useState<string>()
   const [pending, setPending] = useState<string>()
-  const now = useNow(60_000)
   const home = useSystem()?.machine.home
   const [adding, setAdding] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
@@ -692,7 +750,6 @@ function Projects() {
     navigate(row)
   }, [awaited, data, navigate])
   const sum = data ? totals(data.rows) : undefined
-  const waiting = data ? groups(data.rows) : []
   return (
     <>
       <Header>
@@ -798,75 +855,9 @@ function Projects() {
             )}
           </div>
         </section>
-        {waiting.length > 0 && (
-          <section className="mx-auto max-w-4xl px-3 pb-6 md:px-5">
-            <div className="py-1.5 section-label">Waiting on you, by project</div>
-            <div className="space-y-3">
-              {waiting.map(({ row, questions }) => (
-                <QuestionGroup
-                  key={row.root}
-                  now={now}
-                  onOpen={(message) => navigate(row, message)}
-                  questions={questions}
-                  row={row}
-                />
-              ))}
-            </div>
-          </section>
-        )}
       </main>
       <StatusLine />
     </>
-  )
-}
-
-/** One project's waiting questions, oldest first, under its tile and name; each opens that project's Inbox at it. */
-function QuestionGroup({
-  row,
-  questions,
-  now,
-  onOpen,
-}: {
-  row: Row
-  questions: Row['waiting']
-  now: number
-  onOpen: (message: number) => void
-}) {
-  const override = useOverrides()[row.name]
-  return (
-    <div className="rounded-lg border border-border/70 bg-card/40" data-question-group={row.name}>
-      <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
-        <img alt="" className="size-[18px] shrink-0" src={tile(row.name, { override })} />
-        <span className="truncate text-[13px] font-medium">{row.name}</span>
-        {row.current && (
-          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">this window</span>
-        )}
-        <span className={cn('ml-auto shrink-0 font-mono text-[11px]', tones['needs-you'])}>
-          {questions.length} waiting
-        </span>
-      </div>
-      <ul className="divide-y divide-border/50">
-        {questions.map((question) => (
-          <li key={question.message}>
-            <button
-              className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent/50"
-              data-question={question.message}
-              onClick={() => onOpen(question.message)}
-              title={`Open in ${row.name}'s Inbox`}
-              type="button"
-            >
-              <span className="min-w-0 flex-1 truncate text-[13px]">
-                {questionLine(question.text)}
-              </span>
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/70">
-                {formatAgo(question.at, now, { ago: true })}
-              </span>
-              <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 
@@ -1111,7 +1102,7 @@ export default defineWebExtension({
     'statusline.right': [{ component: Counter, order: -4, phone: true }],
     overlay: [Arrival],
   },
-  provides: [provide(UnderUltimate, useElsewhereRow)],
+  provides: [provide(InboxItems, useElsewhereItems)],
   surfaces: [
     {
       id: 'projects',

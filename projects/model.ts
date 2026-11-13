@@ -1,12 +1,26 @@
 /** The Projects overview's shapes and the pure rules behind it: row state, totals, links. Browser-safe. */
 import type { TabStatus } from '../tab-status/status.ts'
 
-/** A message waiting on the user's answer, as `messages`' `openQuestions()` lists it. */
+/** One question a message asks, as messages stores it (`extensions/messages/refs.ts` `Question`). */
+export type Question = {
+  text: string
+  kind: 'choice' | 'multi' | 'confirm' | 'text' | 'scale'
+  ref?: string
+  options?: { label: string; key?: string; detail?: string; recommended?: boolean }[]
+  scale?: { min: number; max: number; low?: string; high?: string }
+}
+
+/**
+ * A message waiting on the user's answer, as `messages`' `openQuestions()` lists it, with its whole `text`, its
+ * `questions` and how many images it forwards, read from that project's Messages log.
+ */
 export type Waiting = {
   message: number
   conversation: number
   at: number
   text: string
+  questions?: Question[]
+  images?: number
 }
 
 /** What one instance says about itself (`projects/here`). */
@@ -102,25 +116,19 @@ export const groups = (rows: readonly Row[]) =>
     .map((row) => ({ row, questions: row.waiting.toSorted((a, b) => a.at - b.at) }))
     .toSorted((a, b) => a.questions[0].at - b.questions[0].at)
 
-/**
- * The sidebar's Elsewhere row for what waits in the other projects: the count, where (up to two names, else how many
- * projects), and the oldest question to open; undefined when nothing waits elsewhere.
- */
-export function elsewhere(rows: readonly Row[]) {
-  const waiting = groups(rows.filter((row) => !row.current))
-  if (!waiting.length) return undefined
-  return {
-    count: waiting.reduce((sum, group) => sum + group.questions.length, 0),
-    where:
-      waiting.length > 2
-        ? `in ${waiting.length} projects`
-        : `in ${waiting.map((group) => group.row.name).join(', ')}`,
-    oldest: { row: waiting[0].row, question: waiting[0].questions[0] },
-  }
-}
+/** The Inbox key of question `message` waiting in project `name`. */
+export const itemKey = (name: string, message: number) => `projects:${name}:${message}`
 
-/** A question's one line without the `questions ` its card header starts with. */
-export const questionLine = (text: string) => text.replace(/^questions /, '')
+/**
+ * The questions waiting in the other projects, for this project's Inbox: each with its key, its project's row and the
+ * question. This project's own are the Inbox's already.
+ */
+export const elsewhereItems = (rows: readonly Row[]) =>
+  rows
+    .filter((row) => !row.current)
+    .flatMap((row) =>
+      row.waiting.map((question) => ({ key: itemKey(row.name, question.message), row, question })),
+    )
 
 /** Rows in a steady order: the current project first, then by name. */
 export const ordered = (rows: readonly Row[]) =>
