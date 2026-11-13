@@ -124,7 +124,6 @@ export default function pushover(host: ExtensionHost) {
         if (note) await deliver(host, note)
       })(),
     )
-  questions.send = send
 
   host.react(
     'messages',
@@ -149,6 +148,8 @@ export default function pushover(host: ExtensionHost) {
   )
 
   host.onOpen(async () => {
+    // Each open, not only at load: a failed core swap reopens this process's harness after onRelease let go.
+    questions.send = send
     // Once per process, not on each reload of the facet.
     const told = host.resource('pushover.told', () => ({ missing: false }))
     if (told.missing || (await keys(host))) return
