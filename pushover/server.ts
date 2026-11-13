@@ -124,6 +124,8 @@ export default function pushover(host: ExtensionHost) {
         if (note) await deliver(host, note)
       })(),
     )
+  // At once, before the facet it replaces lets go: a window ending while that one closes still has a sender.
+  questions.send = send
 
   host.react(
     'messages',
