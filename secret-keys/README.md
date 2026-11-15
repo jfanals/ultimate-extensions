@@ -20,7 +20,8 @@ declares yours. Name a key in ⌘K **New secret…**, with its value now or late
   stored stays until you delete it in the panel.
 - **`request_secret {name, description, url?}`**, an agent tool: it adds an empty key and tells the agent to send you to
   ⌘K → Secrets. It never takes or returns a value. A prompt section tells agents to use it instead of asking for a key
-  in chat.
+  in chat, and never to read credential files (`~/.zshrc`, `.env`, `~/.ssh`, `apiKey` values in Pi's `models.json`) in
+  a way that prints values: to find where a key is set, they print key names only.
 - **`ultimate-secret NAME`**: prints one stored value to stdout, with no newline. It exits 1 with a message on stderr
   when the value is not set, and 2 on a bad name.
 

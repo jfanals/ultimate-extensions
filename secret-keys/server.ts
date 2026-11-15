@@ -36,7 +36,7 @@ export default function secretKeys(host: Host) {
       section(
         'secret-keys',
         () =>
-          'When something you set up needs an API key, token or password the user has not stored, call request_secret instead of asking for it in chat: the user pastes it in the Secrets panel. Server code reads it with readSecret; shell scripts and configs with `ultimate-secret NAME`, only where its output goes into a variable, a pipe or a config, never into your transcript.',
+          "When something you set up needs an API key, token or password the user has not stored, call request_secret instead of asking for it in chat: the user pastes it in the Secrets panel. Server code reads it with readSecret; shell scripts and configs with `ultimate-secret NAME`, only where its output goes into a variable, a pipe or a config, never into your transcript. Never read, cat or grep files that hold credentials (`~/.zshrc` and other shell startup files, `.env` files, `~/.ssh`, `apiKey` values in Pi's `models.json`) in a way that prints their values: to find where a key is set, print key names only, for example `grep -o '^export [A-Z_]*' ~/.zshrc`.",
       ),
     ],
     tools: [
