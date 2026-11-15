@@ -1,15 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import {
-  elsewhereItems,
-  groups,
-  ordered,
-  projectUrl,
-  rowState,
-  STARTING_MS,
-  startEnv,
-  totals,
-} from './model.ts'
+import { groups, ordered, projectUrl, rowState, STARTING_MS, startEnv, totals } from './model.ts'
 import type { Row } from './model.ts'
 
 const row = (
@@ -50,22 +41,6 @@ test('questions group by project, oldest first in each, the project waiting long
     [
       ['c', [20, 40]],
       ['a', [25, 30]],
-    ],
-  )
-})
-
-test("the Inbox gets every other project's questions, keyed by project and message, and none of this one's", () => {
-  const items = elsewhereItems([
-    row('here', [5], 'needs-you', true),
-    row('b', [30]),
-    row('c', [10, 40]),
-  ])
-  assert.deepEqual(
-    items.map((item) => [item.key, item.question.at]),
-    [
-      ['fleet:b:1', 30],
-      ['fleet:c:1', 10],
-      ['fleet:c:2', 40],
     ],
   )
 })

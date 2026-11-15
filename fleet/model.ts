@@ -1,26 +1,12 @@
 /** The Fleet overview's shapes and the pure rules behind it: row state, totals, links. Browser-safe. */
 import type { TabStatus } from '../tab-status/status.ts'
 
-/** One question a message asks, as messages stores it (`extensions/messages/refs.ts` `Question`). */
-export type Question = {
-  text: string
-  kind: 'choice' | 'multi' | 'confirm' | 'text' | 'scale'
-  ref?: string
-  options?: { label: string; key?: string; detail?: string; recommended?: boolean }[]
-  scale?: { min: number; max: number; low?: string; high?: string }
-}
-
-/**
- * A message waiting on the user's answer, as `messages`' `openQuestions()` lists it, with its whole `text`, its
- * `questions` and how many images it forwards, read from that project's Messages log.
- */
+/** A message waiting on the user's answer, as `messages`' `openQuestions()` lists it. */
 export type Waiting = {
   message: number
   conversation: number
   at: number
   text: string
-  questions?: Question[]
-  images?: number
 }
 
 /** What one instance says about itself (`fleet/here`). */
@@ -115,20 +101,6 @@ export const groups = (rows: readonly Row[]) =>
     .filter((row) => row.waiting.length > 0)
     .map((row) => ({ row, questions: row.waiting.toSorted((a, b) => a.at - b.at) }))
     .toSorted((a, b) => a.questions[0].at - b.questions[0].at)
-
-/** The Inbox key of question `message` waiting in project `name`. */
-export const itemKey = (name: string, message: number) => `fleet:${name}:${message}`
-
-/**
- * The questions waiting in the other projects, for this project's Inbox: each with its key, its project's row and the
- * question. This project's own are the Inbox's already.
- */
-export const elsewhereItems = (rows: readonly Row[]) =>
-  rows
-    .filter((row) => !row.current)
-    .flatMap((row) =>
-      row.waiting.map((question) => ({ key: itemKey(row.name, question.message), row, question })),
-    )
 
 /** Rows in a steady order: the current project first, then by name. */
 export const ordered = (rows: readonly Row[]) =>

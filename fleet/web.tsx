@@ -1,11 +1,9 @@
 import {
   ChevronRightIcon,
   EllipsisIcon,
-  ExternalLinkIcon,
   FolderIcon,
   LayersIcon,
   LoaderCircleIcon,
-  MessageCircleQuestionIcon,
   PlusIcon,
   XIcon,
 } from 'lucide-react'
@@ -29,7 +27,6 @@ import {
   Header,
   plural,
   prettyName,
-  provide,
   shortenPath,
   StatusLine,
   useDocOf,
@@ -38,18 +35,13 @@ import {
   useUltimate,
   useViewport,
 } from '@/sdk'
-import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { lead } from '@/../../extensions/inbox/items.tsx'
-import { InboxItems } from '@/../../extensions/inbox/ui.tsx'
-import type { InboxItem } from '@/../../extensions/inbox/ui.tsx'
-import { Body } from '@/../../extensions/messages/ui.tsx'
 import { ProjectSwatch } from '@/../../extensions/sidebar/ui.tsx'
 import { tile } from '../project-icon/icon.ts'
 import { useOverrides } from '../project-icon/use-overrides.ts'
 import { looks } from '../tab-status/status.ts'
-import { ARRIVAL, elsewhereItems, groups, itemKey, projectUrl, totals, validName } from './model.ts'
-import type { Folders, Overview, Row, RowState, Waiting } from './model.ts'
+import { ARRIVAL, groups, projectUrl, totals, validName } from './model.ts'
+import type { Folders, Overview, Row, RowState } from './model.ts'
 
 /** No arguments → every project on this machine with its instance's status (server.ts). */
 const OverviewAction = actionRef<null, Overview>('fleet', 'overview')
@@ -123,20 +115,18 @@ const useOverview = () => useSyncExternalStore(overview.subscribe, overview.get)
 const StandingDoc = docRef<Record<string, number>>('ultimate.standing-agents')
 
 /**
- * Go to a project's question or the project itself. A question opens in this window's Inbox, without a reload: this
- * project's own by its message, another's by its item (`elsewhereItems`). Without one, this project opens its
- * @ultimate, another project its page.
+ * Go to a project's question or the project itself. Another project opens its page, at the question in its Inbox when
+ * there is one; this project opens the question in its Inbox without a reload, else its @ultimate.
  */
 function useNavigate() {
   const { showSurface, switchConversation } = useUltimate()
   const ultimate = useDocOf(1, StandingDoc)?.ultimate
   return (row: Row, message?: number) => {
-    if (message !== undefined)
-      events.emit('inbox:open', row.current ? { message } : { key: itemKey(row.name, message) })
-    else if (!row.current) {
-      const url = projectUrl(location, row)
+    if (!row.current) {
+      const url = projectUrl(location, row, message)
       if (url) location.href = url
-    } else {
+    } else if (message !== undefined) events.emit('inbox:open', { message })
+    else {
       showSurface('agent')
       if (ultimate !== undefined) switchConversation(ultimate)
     }
@@ -155,87 +145,6 @@ function Arrival() {
     history.replaceState(history.state, '', location.pathname + location.search)
   }, [showSurface])
   return null
-}
-
-/**
- * The questions waiting in the other projects, as this project's Inbox items: tagged with their project, the whole text
- * in the reading pane, and Answer in <project>, which opens that project's Inbox at the question.
- */
-function useElsewhereItems(): InboxItem[] {
-  const { data } = useOverview()
-  if (!data) return []
-  return elsewhereItems(data.rows).map(({ key, row, question }) => ({
-    key,
-    at: question.at,
-    tag: row.name,
-    title: lead(question.text).title,
-    ...(question.questions?.[0] ? { gist: question.questions[0].text } : {}),
-    pane: <ElsewherePane question={question} row={row} />,
-  }))
-}
-
-/** The reading pane of another project's question: the rest of its text, its questions, and where to answer it. */
-function ElsewherePane({ row, question }: { row: Row; question: Waiting }) {
-  const { body } = lead(question.text)
-  const url = projectUrl(location, row, question.message)
-  const questions = question.questions ?? []
-  return (
-    <div className="space-y-4">
-      {body && (
-        // Body's own card padding and 13px give way to the reading pane's prose, as the Inbox draws a question's.
-        <div className="[&>div]:px-0 [&>div]:py-0 [&>div]:text-[15px] [&>div]:leading-6">
-          <Body text={body} />
-        </div>
-      )}
-      {question.images ? (
-        <p className="font-mono text-[11.5px] text-muted-foreground">
-          {plural(question.images, 'image')} with it, shown in {row.name}
-        </p>
-      ) : null}
-      {questions.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border/70 bg-card/60">
-          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 font-mono text-[11px] text-muted-foreground">
-            <MessageCircleQuestionIcon className="size-3.5 text-brand" />
-            <span className="text-foreground">{plural(questions.length, 'question')}</span>
-          </div>
-          <ol className="space-y-3 px-3 pt-1 pb-3">
-            {questions.map((item, index) => (
-              <li className="text-[13px]" key={item.text}>
-                <span className="font-medium">
-                  {item.ref ?? index + 1}. {item.text}
-                </span>
-                {item.options && (
-                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                    {item.options.map((option, at) => (
-                      <li className="flex items-baseline gap-2" key={option.label}>
-                        <span className="font-mono text-[11px]">
-                          {option.key ?? String.fromCharCode(97 + at)}
-                        </span>
-                        <span className="text-foreground/90">{option.label}</span>
-                        {option.recommended && (
-                          <span className="rounded-full border border-brand/40 px-1.5 font-mono text-[10px] text-brand">
-                            my pick
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-      {url && (
-        <Button asChild size="sm">
-          <a data-fleet-answer={question.message} href={url}>
-            <ExternalLinkIcon className="size-3.5" />
-            Answer in {row.name}
-          </a>
-        </Button>
-      )}
-    </div>
-  )
 }
 
 /** The status line's global counter: messages waiting on the user across every project. Opens Fleet. */
@@ -1176,7 +1085,6 @@ export default defineWebExtension({
     sidebar: [{ component: PhoneProjects, order: -10 }],
     overlay: [Arrival],
   },
-  provides: [provide(InboxItems, useElsewhereItems)],
   surfaces: [
     {
       id: 'fleet',

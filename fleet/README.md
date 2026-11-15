@@ -10,9 +10,8 @@ name keeps this user extension from shadowing it.
   tab-status folder must sit next to it, as it does in the clone. Install both.
 - **project-icon**, from this repository: each row shows its project's tile (`../project-icon/`), with the
   `projectIcon` overrides applied.
-- Ultimate's built-in **inbox** and **messages** extensions: the other projects' questions join this project's Inbox
-  through the Inbox's `InboxItems` point, drawn with its `lead` and messages' `Body` (imported from the clone,
-  `@/../../extensions/inbox/` and `@/../../extensions/messages/ui.tsx`).
+- Ultimate's built-in **inbox** and **messages** extensions: a row's waiting count opens that project's Inbox at its
+  question, and `here` lists the questions through the `messages` service.
 - Optional: Ultimate's built-in tailscale extension, for links that open over the tailnet.
 
 ## Using it
@@ -26,12 +25,6 @@ name keeps this user extension from shadowing it.
   folded to one line (`Projects 8 · 2 working`) while nothing waits on you and opens on a tap; it opens by itself
   when something waits. A tap on a row opens that project, over the tailnet when the page came from it; this project's
   row opens its @ultimate. Desktop and tablet keep the rail.
-- **The Inbox lists every project's questions.** Each question waiting in another running project is an item in this
-  project's Inbox, tagged with that project's name, so the Inbox row and the To-dos' "For you" count everything that
-  waits on you. Its reading pane shows the whole message, its questions with their picks (read-only), how many images
-  came with it, and **Answer in <project>**, which opens that project's Inbox at the question. The item leaves once the
-  question is answered or dismissed there, by the next poll (30 s). The item's key is `fleet:<name>:<message>`, so
-  `?inbox=fleet:my-app:12` opens one. Images and links to the other project's files show only there.
 - **Fleet** (a surface, `mod+1…9` or ⌘K **Open Fleet**) lists each project with its tile, folder and status, the
   current one first and marked **this window**:
 
@@ -49,9 +42,9 @@ name keeps this user extension from shadowing it.
 
 - **The whole row opens it.** Click or tap anywhere on a row: a running project opens in the same window, the
   **this window** row opens this project's @ultimate, a stopped one starts and opens once it answers, a starting one
-  opens once it answers (the status adds `opens when ready`). A row with `n waiting` opens this window's Inbox at that
-  project's oldest question instead, without leaving. The row is one button, so Tab reaches it and Enter opens it. That
-  project's own counter and Fleet tab bring you back. Over the tailnet (HTTPS) links use each project's tailnet
+  opens once it answers (the status adds `opens when ready`). A row with `n waiting` opens that project's Inbox at its
+  oldest question instead (this window's row without leaving). The row is one button, so Tab reaches it and Enter
+  opens it. That project's own counter and Fleet tab bring you back. Over the tailnet (HTTPS) links use each project's tailnet
   port, else its loopback port.
 - **Desktop and tablet:** the one other action sits in its own column at the right, outside the row's button: **Stop**
   on a running project, **Start** (start without opening) and **⋯** → **Hide** on a stopped one.
@@ -110,26 +103,23 @@ Ultimate picks up each change live; no restart.
 
 Every Ultimate on the machine loads this user extension, so each answers `fleet/here`: its own status by
 tab-status's rules (the same priority as the browser tab), its busy count, and the messages waiting on the user (the
-`messages` service's `openQuestions()`), each with its whole text, its questions and its image count from the Messages
-log (the `board` document). The instance the page is on answers `overview`: the projects registry
+`messages` service's `openQuestions()`). The instance the page is on answers `overview`: the projects registry
 (`host.projects()`), each running instance's `here` over loopback with its own `Origin`, and the tailnet ports from
 `~/.ultimate/tailscale.json`. The page polls `overview` every 30 s, every 3 s while a project starts or stops. `folders` lists the
 roots on demand when Add project opens.
 
-The questions of the other projects become Inbox items in the page (`InboxItems`), from that same poll. Nothing is
-copied into this project: every project that runs this extension lists the others' questions the same way, and none
-pushes them. Each project's own push extension, where it is on, notifies its own questions once. **Answer in
-<project>** opens `?inbox=<message>` there, which the inbox extension turns into its surface at that item (and wins
+Each project's Inbox lists only its own questions; Fleet only counts the others'. A row with a question opens
+`?inbox=<message>` in that project, which the inbox extension turns into its surface at that item (and wins
 over wherever the project was left). A row without a question opens with `#fleet-open`, so the target shows its
 conversation even when it was last left on Fleet, which it usually was: that is how you got here.
 
 "new answer" uses the `ext.conversations.seen` the user's last browser left in that project, so it can lag behind the
 browser tab's own dot.
 
-It imports packages, `@/sdk`, tab-status's `status.ts`, project-icon's tile, and the inbox's `InboxItems` and `lead` and
-messages' `Body` from the clone; on the server other extensions are named by string (the `messages` service, the
-`board` and `ultimate.conversation-overview` documents, `ext.conversations.*` UI state). If an Ultimate update renames
-one, `here` fails and rows show `not answering`.
+It imports packages, `@/sdk`, tab-status's `status.ts`, project-icon's tile, and the sidebar's `ProjectSwatch` from the
+clone; on the server other extensions are named by string (the `messages` service, the `ultimate.conversation-overview`
+document, `ext.conversations.*` UI state). If an Ultimate update renames one, `here` fails and rows show
+`not answering`.
 
 ## Tests
 
