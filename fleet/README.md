@@ -20,6 +20,12 @@ name keeps this user extension from shadowing it.
 - **The counter** in the status line, `◆ 3 waiting in 2 projects`, counts the messages waiting on your answer in every
   project; amber while any waits, a quiet grey `◆ 0` when none does. On a phone it stays on the line as `◆ 3 waiting`.
   Click it to open Fleet.
+- **Projects in the phone sidebar.** Ultimate's projects rail is off on phones, so on a phone Fleet puts a
+  **Projects** section at the top of the sidebar (the panel the top-left button opens): one row per running project
+  with the rail's colour swatch, its name, an amber count while questions wait there and a dot while it works. It is
+  folded to one line (`Projects 8 · 2 working`) while nothing waits on you and opens on a tap; it opens by itself
+  when something waits. A tap on a row opens that project, over the tailnet when the page came from it; this project's
+  row opens its @ultimate. Desktop and tablet keep the rail.
 - **The Inbox lists every project's questions.** Each question waiting in another running project is an item in this
   project's Inbox, tagged with that project's name, so the Inbox row and the To-dos' "For you" count everything that
   waits on you. Its reading pane shows the whole message, its questions with their picks (read-only), how many images

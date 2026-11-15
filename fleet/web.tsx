@@ -28,6 +28,7 @@ import {
   formatAgo,
   Header,
   plural,
+  prettyName,
   provide,
   shortenPath,
   StatusLine,
@@ -38,10 +39,12 @@ import {
   useViewport,
 } from '@/sdk'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { lead } from '@/../../extensions/inbox/items.tsx'
 import { InboxItems } from '@/../../extensions/inbox/ui.tsx'
 import type { InboxItem } from '@/../../extensions/inbox/ui.tsx'
 import { Body } from '@/../../extensions/messages/ui.tsx'
+import { ProjectSwatch } from '@/../../extensions/sidebar/ui.tsx'
 import { tile } from '../project-icon/icon.ts'
 import { useOverrides } from '../project-icon/use-overrides.ts'
 import { looks } from '../tab-status/status.ts'
@@ -262,6 +265,75 @@ function Counter() {
         <span>0</span>
       )}
     </button>
+  )
+}
+
+/**
+ * Phones only, where upstream's projects rail is off on purpose: the running projects at the top of the sidebar, each
+ * with the rail's swatch, an amber count of what waits on the user and a dot while it works. Folded to one line while
+ * nothing waits; a tap on a row opens that project, as Fleet's rows do.
+ */
+function PhoneProjects() {
+  const phone = useViewport() === 'phone'
+  const { data } = useOverview()
+  const navigate = useNavigate()
+  const [folded, setFolded] = useState<boolean>()
+  const rows = data?.rows.filter((row) => row.current || row.port !== undefined) ?? []
+  // Like the rail: with only this project running there is nothing to switch to.
+  if (!phone || rows.length < 2) return null
+  const { waiting, working } = totals(rows)
+  const family = rows.map((row) => row.name)
+  const open = !(folded ?? waiting === 0)
+  return (
+    <Collapsible
+      aria-label="Projects"
+      className="flex shrink-0 flex-col gap-px border-b border-border/60 pt-1.5 pb-1"
+      data-fleet-projects
+      onOpenChange={(next) => setFolded(!next)}
+      open={open}
+    >
+      <CollapsibleTrigger className="group/projects mx-2 flex h-6 cursor-pointer items-center gap-1 rounded-md px-1 section-label outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring">
+        <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/projects:rotate-90" />
+        Projects
+        <span className="ml-0.5 text-muted-foreground/60 tabular-nums">{rows.length}</span>
+        {!open && (waiting > 0 || working > 0) && (
+          <span className={cn('ml-auto', waiting > 0 ? tones['needs-you'] : tones.working)}>
+            {waiting > 0 ? `${waiting} for you` : `${working} working`}
+          </span>
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-px">
+        {rows.map((row) => (
+          <button
+            className="mx-2 flex h-8 min-w-0 cursor-pointer items-center gap-2.5 rounded-md pr-2 pl-2.5 text-left outline-none hover:bg-sidebar-accent/50 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-default disabled:opacity-45"
+            data-fleet-project={row.name}
+            disabled={!row.current && !projectUrl(location, row)}
+            key={row.root}
+            onClick={() => navigate(row)}
+            type="button"
+          >
+            <ProjectSwatch className="h-4 w-1.5 rounded-full" family={family} folder={row.name} />
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-[13px]',
+                row.current ? 'font-semibold text-foreground' : 'text-foreground/85',
+              )}
+            >
+              {prettyName(row.name)}
+            </span>
+            {row.waiting.length > 0 ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-amber-400/15 px-1.5 font-mono text-[10px] font-semibold text-amber-700 tabular-nums ring-1 ring-amber-500/30 ring-inset dark:text-amber-300">
+                {row.waiting.length}
+              </span>
+            ) : (
+              row.busy > 0 && (
+                <span className="size-1.5 shrink-0 animate-pulse-dot rounded-full bg-brand" />
+              )
+            )}
+          </button>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -1100,6 +1172,8 @@ function AddProject({
 export default defineWebExtension({
   slots: {
     'statusline.right': [{ component: Counter, order: -4, phone: true }],
+    // Before the sidebar's own project header, so the drawer opens on where else you can go.
+    sidebar: [{ component: PhoneProjects, order: -10 }],
     overlay: [Arrival],
   },
   provides: [provide(InboxItems, useElsewhereItems)],
