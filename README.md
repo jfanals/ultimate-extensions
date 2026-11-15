@@ -6,22 +6,23 @@ changes Ultimate itself. Two exceptions: prompt-cache loads Pi's internal `cache
 `node_modules`, so a Pi upgrade in Ultimate can break it; voice replaces Ultimate's built-in voice by name and
 imports it from the clone (its README says which files it follows).
 
-| Extension                     | What it does                                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| [cliproxy](cliproxy/)         | Picks the least-used Codex and Claude account daily through a local CLIProxyAPI service.           |
-| [awake](awake/)               | Keeps the Mac from sleeping on AC power while agents work; macOS only.                             |
-| [project-icon](project-icon/) | Each project's tile: two initials on a colour from its name, for the favicon and Fleet rows.       |
-| [tab-status](tab-status/)     | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
-| [fleet](fleet/)               | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
-| [prompt-cache](prompt-cache/) | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
-| [speech](speech/)             | Local Parakeet speech to text, Underdog Woof and Kokoro text to speech, on demand; Apple Silicon.  |
-| [voice](voice/)               | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
-| [drive](drive/)               | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
-| [media](media/)               | Audio, video, decks and text files that agents link or name in inline code play or open inline.    |
-| [image-viewer](image-viewer/) | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
-| [todos-badge](todos-badge/)   | The To-dos tab counts what waits on you: amber while a question does, grey for only your to-dos.   |
-| [secret-keys](secret-keys/)   | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
-| [pushover](pushover/)         | Pushover notifications for questions, landings and @ultimate's reports while you are away.         |
+| Extension                         | What it does                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [cliproxy](cliproxy/)             | Picks the least-used Codex and Claude account daily through a local CLIProxyAPI service.           |
+| [awake](awake/)                   | Keeps the Mac from sleeping on AC power while agents work; macOS only.                             |
+| [project-icon](project-icon/)     | Each project's tile: two initials on a colour from its name, for the favicon and Fleet rows.       |
+| [tab-status](tab-status/)         | The browser tab's favicon and title show whether the project needs you, failed, works or answered. |
+| [fleet](fleet/)                   | Every Ultimate project on the machine on one surface, with a counter of questions waiting on you.  |
+| [prompt-cache](prompt-cache/)     | Marks keep-warm pings; the status line totals cache rebuilds and warms with their cost.            |
+| [speech](speech/)                 | Local Parakeet speech to text, Underdog Woof and Kokoro text to speech, on demand; Apple Silicon.  |
+| [voice](voice/)                   | Ultimate's voice input, transcribing through a local server (`voice.transcriptionUrl`) keylessly.  |
+| [drive](drive/)                   | A phone screen to talk to @ultimate and hear its answers aloud.                                    |
+| [media](media/)                   | Audio, video, decks and text files that agents link or name in inline code play or open inline.    |
+| [image-viewer](image-viewer/)     | A full-size image steps to the conversation's previous and next image with ← and →, or a swipe.    |
+| [todos-badge](todos-badge/)       | The To-dos tab counts what waits on you: amber while a question does, grey for only your to-dos.   |
+| [secret-keys](secret-keys/)       | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
+| [pushover](pushover/)             | Pushover notifications for questions, landings and @ultimate's reports while you are away.         |
+| [dream-defaults](dream-defaults/) | Your thresholds for the two built-in dream automations, in every project, new ones included.       |
 
 ## Install
 
@@ -60,6 +61,7 @@ No restart: Ultimate reloads an extension when its files change.
 - **pushover** needs a Pushover account and its two keys in Secrets; links reach your phone through Ultimate's
   tailscale extension.
 - **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
+- **dream-defaults** uses Ultimate's dream and automations extensions, both built in.
 
 The others stand alone. Each README lists its requirements, settings and tests.
 
@@ -69,7 +71,7 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts fleet/fleet.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts pushover/rules.test.ts
+node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts fleet/fleet.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts pushover/rules.test.ts dream-defaults/defaults.test.ts
 ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
 ```
 
