@@ -1,7 +1,6 @@
 /**
- * Dream defaults: the user's thresholds for dream's two built-in automations, in every project. Once per chapter, when
- * dream has made them, each one still at upstream's threshold gets the user's (`defaults.ts` decides). What it set or
- * left is recorded in the chapter's folder, so a later edit, pause or deletion by the user stays.
+ * Dream defaults: the user's thresholds for dream's two built-in automations, once per chapter (README, `defaults.ts`).
+ * What it set or left goes into the chapter's folder, so a later edit, pause or deletion by the user stays.
  */
 import { join } from 'node:path'
 import { defineExtension } from '@earendil-works/pi-durable'
@@ -19,12 +18,13 @@ type Done = { done: string[] }
 export default function dreamDefaults(host: ExtensionHost) {
   // One check at a time, across facet reloads: two at once could both update.
   const queue = host.resource('dream-defaults.queue', () => ({ last: Promise.resolve() }))
-  let stop: (() => void) | undefined
+  /** The current opening's watcher; a check from an earlier opening never touches it. */
+  let opening: { stop?: () => void } | undefined
 
   /** Apply the defaults to the built-ins dream has made; true once nothing is left to wait for. */
   async function check(): Promise<boolean> {
-    const settings = await readSettings(userSettingsPath(host.userHome))
-    const defaults = defaultsOf(settings.dreamDefaults)
+    if (!host.extensions().some((item) => item.name === 'automations' && item.enabled)) return true
+    const defaults = defaultsOf((await readSettings(userSettingsPath(host.userHome))).dreamDefaults)
     if (!defaults) return true
     const { dir } = host.chapter
     const file = join(dir, 'dream-defaults.json')
@@ -60,35 +60,43 @@ export default function dreamDefaults(host: ExtensionHost) {
     return !waiting
   }
 
-  const run = () => {
-    const next = queue.last.then(check).then(
-      (finished) => {
-        if (finished) detach()
-      },
-      (error: unknown) => host.notice(`Dream defaults: ${String(error)}`),
-    )
-    queue.last = next
+  const run = (mine: { stop?: () => void }) => {
+    queue.last = queue.last.then(async () => {
+      if (opening !== mine) return
+      try {
+        if (await check()) mine.stop?.()
+      } catch (error) {
+        host.notice(`Dream defaults: ${String(error)}`)
+      }
+    })
   }
-  const detach = () => {
-    stop?.()
-    stop = undefined
+  const close = async () => {
+    opening?.stop?.()
+    opening = undefined
+    await queue.last
   }
 
   host.onOpen(async () => {
-    detach()
-    // Dream makes its built-ins after the opening, or once @ultimate starts on a fresh project, and records each id
-    // in its own document: a commit to one is the moment to look. Pi's records, not a domain event.
-    stop = onCommit(host.harness(), (publication) => {
+    await close()
+    const mine: { stop?: () => void } = {}
+    opening = mine
+    // Dream makes its built-ins after the opening, or once @ultimate starts on a fresh project, and records each id in
+    // its own document: a commit to one is the moment to look. Pi's records, not a domain event.
+    const detach = onCommit(host.harness(), (publication) => {
       if (
         publication.changes.some(
           (change) => change.type === 'document' && DREAM_DOCS.includes(change.record.kind),
         )
       )
-        run()
+        run(mine)
     })
-    run()
+    mine.stop = () => {
+      detach()
+      mine.stop = undefined
+    }
+    run(mine)
   })
-  host.onRelease(async () => detach())
-  host.onClose(async () => detach())
+  host.onRelease(close)
+  host.onClose(close)
   return defineExtension({ name: 'dream-defaults' })
 }

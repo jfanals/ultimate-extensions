@@ -23,6 +23,11 @@ test('waits until dream made it; leaves an edit, a pause, a carried condition an
   assert.equal(decide(pause, { beforeCompaction: 22 }, at(50), undefined), 'leave')
 })
 
+test('a built-in its seed carried paused or deleted is left, even while dream has just made it enabled', () => {
+  assert.equal(decide(pause, defaults, at(50), { builtInPause: { enabled: false } }), 'leave')
+  assert.equal(decide(pause, defaults, undefined, { builtInPause: null }), 'leave')
+})
+
 test('settings keep whole percentages from 1 to 99', () => {
   assert.deepEqual(defaultsOf({ beforeCompaction: 22, afterPause: 20 }), defaults)
   assert.deepEqual(defaultsOf({ beforeCompaction: 0, afterPause: 20.5, other: 3 }), undefined)

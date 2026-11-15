@@ -36,9 +36,9 @@ export function defaultsOf(value: unknown): Defaults | undefined {
 type Found = { enabled: boolean; condition?: { above: number } }
 
 /**
- * One built-in this chapter: `wait` while dream has not made it (or the user deleted it first), `leave` once it needs
- * nothing, or the threshold to set. Only an enabled automation still at upstream's threshold changes, and only when the
- * chapter's seed carried no condition of its own: a paused one, an edit and a carried threshold are the user's.
+ * One built-in this chapter: `wait` while dream has not made it, `leave` once it needs nothing, or the threshold to set.
+ * Only an enabled automation still at upstream's threshold changes, and only when the chapter's seed carried it
+ * enabled and without a condition of its own: a pause, a deletion, an edit and a carried threshold are the user's.
  */
 export function decide(
   builtIn: BuiltIn,
@@ -46,12 +46,17 @@ export function decide(
   automation: Found | undefined,
   seed: Record<string, unknown> | undefined,
 ): 'wait' | 'leave' | number {
+  const carried = seed?.[builtIn.seed] as
+    | { enabled?: boolean; condition?: unknown }
+    | null
+    | undefined
+  // Dream makes a seeded pause enabled first and pauses it after: the seed says what it will be.
+  if (carried === null || carried?.enabled === false) return 'leave'
   if (!automation) return 'wait'
   const want = defaults[builtIn.setting]
-  const carried = (seed?.[builtIn.seed] as { condition?: unknown } | null | undefined)?.condition
   if (
     want === undefined ||
-    carried !== undefined ||
+    carried?.condition !== undefined ||
     !automation.enabled ||
     automation.condition?.above !== builtIn.upstream
   )
