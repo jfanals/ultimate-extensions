@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
-import { DEFAULT_DESCRIPTION, keyOf, keysIn, withKey, withoutKey } from './keys.ts'
+import { DEFAULT_DESCRIPTION, keyOf, keysIn, withdrawKey, withKey, withoutKey } from './keys.ts'
 
 test('a key takes Ultimate’s secret names and http(s) links, with a description by default', () => {
   assert.deepEqual(keyOf({ name: 'MY_KEY' }), { name: 'MY_KEY', description: DEFAULT_DESCRIPTION })
@@ -39,6 +39,16 @@ test('settings keep the valid keys; adding replaces by name, forgetting removes'
     withoutKey(replaced, 'A').map((key) => key.name),
     ['B'],
   )
+})
+
+test('withdrawing removes a requested key only while it has no value', () => {
+  const keys = keysIn({ secretKeys: [{ name: 'A' }, { name: 'B' }] })
+  assert.deepEqual(
+    withdrawKey(keys, 'A', false).map((key) => key.name),
+    ['B'],
+  )
+  assert.throws(() => withdrawKey(keys, 'A', true), /A has a stored value/)
+  assert.throws(() => withdrawKey(keys, 'C', false), /C is not a requested key/)
 })
 
 test('ultimate-secret prints a stored value without a newline and fails clearly otherwise', async () => {

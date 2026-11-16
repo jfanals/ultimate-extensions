@@ -8,7 +8,7 @@ import { defineExtension, defineTool, section } from '@earendil-works/pi-durable
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { readSecret } from '@/../../lib/secrets.ts'
 import { readSettings, updateSettings, userSettingsPath } from '@/../../lib/settings.ts'
-import { keyOf, keysIn, withKey, withoutKey } from './keys.ts'
+import { keyOf, keysIn, withdrawKey, withKey, withoutKey } from './keys.ts'
 import type { Key } from './keys.ts'
 
 type Host = { userHome: string }
@@ -28,6 +28,10 @@ const change = (host: Host, modify: (keys: Key[]) => Key[]) =>
     if (keys.length) settings.secretKeys = keys
     else delete settings.secretKeys
   })
+
+/** Whether the user stored a value for `name`; the value itself never leaves this check. */
+const isSet = async (host: Host, name: string) =>
+  (await readSecret(host.userHome, name)) !== undefined
 
 export default function secretKeys(host: Host) {
   return defineExtension({
@@ -54,10 +58,21 @@ export default function secretKeys(host: Host) {
         async execute(args) {
           const key = keyOf(args)
           await change(host, (keys) => withKey(keys, key))
-          const set = (await readSecret(host.userHome, key.name)) !== undefined
-          const text = set
+          const text = (await isSet(host, key.name))
             ? `${key.name} is already set. Read it with readSecret, or \`ultimate-secret ${key.name}\` in a script, never printing it.`
             : `${key.name} now waits in the Secrets panel. Ask the user to open ⌘K → Secrets and paste its value there, never in chat.`
+          return { output: [{ type: 'text', text }] }
+        },
+      }),
+      defineTool({
+        name: 'withdraw_secret',
+        description:
+          'Take back a request_secret that is no longer needed: removes NAME from the Secrets panel while it has no value. Refuses a key with a stored value; only the user deletes values.',
+        parameters: obj({ name: str({ description: 'The name passed to request_secret' }) }),
+        async execute({ name }) {
+          const stored = await isSet(host, name)
+          await change(host, (keys) => withdrawKey(keys, name, stored))
+          const text = `${name} is withdrawn from the Secrets panel.`
           return { output: [{ type: 'text', text }] }
         },
       }),

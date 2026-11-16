@@ -57,3 +57,11 @@ export function withKey(keys: Key[], key: Key): Key[] {
 }
 
 export const withoutKey = (keys: Key[], name: string) => keys.filter((key) => key.name !== name)
+
+/** `keys` without the empty key `name`; a key whose value is `stored` stays, since only the user deletes values. */
+export function withdrawKey(keys: Key[], name: string, stored: boolean): Key[] {
+  if (stored)
+    throw new Error(`${name} has a stored value; only the user removes it, in ⌘K → Secrets.`)
+  if (!keys.some((key) => key.name === name)) throw new Error(`${name} is not a requested key.`)
+  return withoutKey(keys, name)
+}
