@@ -1,10 +1,16 @@
 # Ultimate extensions
 
 Personal extensions for [Ultimate](https://github.com/HazAT/ultimate), each one installable on its own. They are user
-extensions built on Ultimate's public extension API (facets, documents, actions, services and the `@/sdk`); none
-changes Ultimate itself. Two exceptions: prompt-cache loads Pi's internal `cache-stats.js` from the Ultimate clone's
-`node_modules`, so a Pi upgrade in Ultimate can break it; voice replaces Ultimate's built-in voice by name and
-imports it from the clone (its README says which files it follows).
+extensions built on Ultimate's public extension API (facets, documents, actions, services and the Solid SDK,
+`@/sdk/solid`); none changes Ultimate itself. Two exceptions: prompt-cache loads Pi's internal `cache-stats.js` from the
+Ultimate clone's `node_modules`, so a Pi upgrade in Ultimate can break it; voice replaces Ultimate's built-in voice by
+name and imports it from the clone (its README says which files it follows).
+
+## Requirements
+
+Ultimate at or after its Solid core (HazAT/ultimate `f3e6078`, November 2026). Every browser facet is Solid
+(`web.solid.tsx`, `@/sdk/solid`), the way Ultimate's own extensions are written. On an older, React Ultimate, check out
+this repository's last React commit, `091f41e`.
 
 | Extension                         | What it does                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------- |

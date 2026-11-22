@@ -10,8 +10,7 @@ Ultimate clone and wraps two of its exports. Without the setting, every call is 
 ## Requirements
 
 - Ultimate (upstream, unpatched) at or after its Solid core (HazAT/ultimate f3e6078, November 2026). An older Ultimate
-  has no `extensions/voice/web.solid.tsx` to re-export, and its whole web UI fails to build: stay on this repository's
-  commit before the Solid move there.
+  has no `extensions/voice/web.solid.tsx` to re-export, and its whole web UI fails to build (see the top-level README).
 - A transcription server that takes OpenAI's `/v1/audio/transcriptions` form (`file`, answered with `{ text }`):
   [speech](../speech/) on this repository, or [whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s
   `whisper-server --convert --inference-path /v1/audio/transcriptions`.
