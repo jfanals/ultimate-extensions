@@ -228,7 +228,9 @@ function NewSecret(props: { close: () => void }) {
           </Button>
           <Button
             data-agent-confirm={
-              existing()?.set && value().trim() ? 'Replaces the stored secret' : undefined
+              value().trim() && (stored.data() === undefined || existing()?.set)
+                ? 'Replaces the stored secret'
+                : undefined
             }
             data-secret-save
             disabled={busy() || (touched() && (!!problem() || !!linkProblem()))}
