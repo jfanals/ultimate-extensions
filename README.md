@@ -46,10 +46,10 @@ No restart: Ultimate reloads an extension when its files change.
 
 ## Dependencies
 
-- **tab-status** needs **project-icon**: it imports `../project-icon/icon.ts` for the favicon, so the folders must
+- **tab-status** needs **project-icon**: it imports `../project-icon/ui.solid.tsx` for the favicon, so the folders must
   stay side by side as in the clone. Link project-icon too, or its `projectIcon` setting is not read.
-- **fleet** needs **tab-status** and **project-icon**: it imports `../tab-status/status.ts` and the project-icon
-  tile. Install all three.
+- **fleet** needs **tab-status** and **project-icon**: it imports `../tab-status/status.ts`, `../tab-status/ui.solid.tsx`
+  and the project-icon tile. Install all three.
 - **drive** needs **speech** (Underdog Woof for its voice, Parakeet for its talk button) and **voice** for local speech to
   text; with Ultimate's built-in voice instead it transcribes through OpenAI only.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
