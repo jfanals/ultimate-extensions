@@ -61,7 +61,6 @@ No restart: Ultimate reloads an extension when its files change.
 - **voice** needs a transcription server for its setting: **speech**, or any OpenAI-compatible one.
 - **speech** needs an Apple Silicon Mac, Python 3.12 and ffmpeg; see its README.
 - **awake** works on macOS only.
-- **todos-badge** needs an Ultimate whose web SDK has `panelBadges`; on an older one it loads and shows nothing.
 - **secret-keys** uses Ultimate's Secrets extension; link its `ultimate-secret` script onto your PATH to read values
   from scripts and configs.
 - **pushover** needs a Pushover account and its two keys in Secrets; links reach your phone through Ultimate's
