@@ -94,7 +94,7 @@ Ultimate picks up each change live; no restart.
   one while the current one plays, so speech starts after the first sentence.
 
 The screen is a Solid facet (`web.solid.tsx`). It imports only packages, `@/sdk/solid`, the kit's `Button`, the
-clone's `lib/errors.ts` and `lib/timers.ts` and, on the server, its `lib/remote.ts`, never Ultimate's extension files:
+clone's `lib/errors.ts` and, on the server, its `lib/remote.ts`, never Ultimate's extension files:
 other extensions' documents, actions and services are named by string (`board`, `ultimate.standing-agents`,
 `voice/transcribe`, `fleet/overview`, `codemode/read`, the `messages`, `subagents` and `speech` services), with the
 shapes it reads mirrored in `types.ts`. If an Ultimate update renames one of those, the

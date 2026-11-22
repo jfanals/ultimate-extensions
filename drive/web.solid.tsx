@@ -34,7 +34,6 @@ import {
 } from '@/sdk/solid'
 import type { SolidEntryProps } from '@/sdk/solid'
 import { meansNone } from '@/../../lib/errors.ts'
-import { every } from '@/../../lib/timers.ts'
 import type { Board } from './types.ts'
 import { entrySpeech, messageSpeech, plain, sentences } from './speech.ts'
 import type { Utterance } from './speech.ts'
@@ -454,22 +453,18 @@ function DriveScreen(props: { main: ConversationId }) {
   const [last, setLast] = createSignal<Utterance>()
   const [locked, setLocked] = createSignal(false)
   const [question, setQuestion] = createSignal<Target>()
-  const [voice, setVoice] = createSignal<string>()
   const board = useDocOf(() => ROOT, MessagesDoc)
   const visible = usePageVisible()
 
   // Both engines take seconds to load cold: start them as the screen opens, and keep them warm while it is shown.
-  const warm = () => {
-    api
-      .action(WarmAction)
-      .then((warmed) => setVoice(warmed.voice))
-      .catch((failure: unknown) => setError(errorMessage(failure)))
-  }
-  createEffect(visible, (shown) => {
-    if (!shown) return undefined
-    warm()
-    return every(KEEP_WARM_MS, warm)
+  const warmed = useAction(WarmAction, null, {
+    every: () => (visible() ? KEEP_WARM_MS : undefined),
   })
+  const voice = () => warmed.data()?.voice
+  const shownError = () => {
+    const failure = warmed.error()
+    return error() ?? (failure && errorMessage(failure))
+  }
 
   /** What arrived while audio was still locked, played in order once a tap unlocks it. */
   let waiting: Utterance[] = []
@@ -685,7 +680,7 @@ function DriveScreen(props: { main: ConversationId }) {
     setLocked(false)
     setError(undefined)
     // Not awaited: the engines warm up while the user speaks.
-    warm()
+    void warmed.refetch()
     if (!window.isSecureContext) setError('The microphone needs HTTPS: open the tailnet URL')
     else await start()
   }
@@ -765,9 +760,9 @@ function DriveScreen(props: { main: ConversationId }) {
         {/* One quiet line under the word; it always takes its room so the button never jumps. */}
         <div class="flex min-h-14 items-start justify-center text-xl">
           <Switch>
-            <Match when={error()}>
-              <p class="line-clamp-2 text-error" role="alert">
-                {error()}
+            <Match when={shownError()}>
+              <p class="line-clamp-2 text-error wrap-anywhere" role="alert">
+                {shownError()}
               </p>
             </Match>
             <Match when={taking()}>
