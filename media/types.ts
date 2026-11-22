@@ -105,12 +105,37 @@ export function resolveLink(url: string, folder: string) {
   return normalize(`${encodeURI(folder)}/${url.replace(/[?#].*$/, '')}`)
 }
 
-/** A link's, image's or definition's destination in Markdown source: its span as written and the URL it means. */
 export type Destination = { start: number; end: number; url: string }
+type Marked = { url?: string; data?: { destination?: [number, number] }; children?: Marked[] }
+type Token = { start: { offset: number }; end: { offset: number } }
+
+/** A remark plugin: each link, image and definition node of the tree it parses carries where its destination is written. */
+export function remarkDestinations(this: { data(): unknown }) {
+  const mark = function (this: { stack: Marked[] }, token: Token) {
+    const node = this.stack.at(-1)
+    if (node) node.data = { ...node.data, destination: [token.start.offset, token.end.offset] }
+  }
+  const data = this.data() as { fromMarkdownExtensions?: unknown[] }
+  ;(data.fromMarkdownExtensions ??= []).push({
+    exit: { resourceDestination: mark, definitionDestination: mark },
+  })
+}
+
+/** The destinations of a tree parsed with `remarkDestinations`: where each is written and the URL it means. */
+export function destinationsOf(tree: unknown) {
+  const found: Destination[] = []
+  const walk = (node: Marked) => {
+    const at = node.data?.destination
+    if (at && node.url !== undefined) found.push({ start: at[0], end: at[1], url: node.url })
+    node.children?.forEach(walk)
+  }
+  walk(tree as Marked)
+  return found
+}
 
 /**
- * `text`, a Markdown file in `folder`, with each of its `destinations` rewritten to what `resolveLink` makes of it, in
- * angle brackets so spaces and parentheses stay part of it; labels, titles and everything else stay as written.
+ * `text`, a Markdown file in `folder`, with each of its `destinations` written as what `resolveLink` makes of it:
+ * parsed again, each destination means exactly that URL. Everything else stays as written.
  */
 export function resolveDestinations(text: string, destinations: Destination[], folder: string) {
   return destinations
@@ -118,7 +143,7 @@ export function resolveDestinations(text: string, destinations: Destination[], f
     .reduce((result, { start, end, url }) => {
       const to = resolveLink(url, folder)
       if (to === url) return result
-      return `${result.slice(0, start)}<${to.replace(/[<>\\]/g, encodeURIComponent)}>${result.slice(end)}`
+      return `${result.slice(0, start)}<${to.replace(/[\\<>&|]/g, '\\$&')}>${result.slice(end)}`
     }, text)
 }
 
