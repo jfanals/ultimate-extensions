@@ -47,17 +47,18 @@ git -C ~/ultimate-extensions pull                                               
 rm ~/.ultimate/extensions/tab-status                                              # uninstall
 ```
 
-Ultimate picks up each change live; no restart. The [fleet](../fleet/) extension imports `status.ts` from this
-folder, so keep tab-status in the clone while fleet is installed (it need not be linked).
+Ultimate picks up each change live; no restart. The [fleet](../fleet/) extension imports `status.ts` and `ui.solid.tsx`
+from this folder, so keep tab-status in the clone while fleet is installed (it need not be linked).
 
 ## How it works
 
-A web facet only (`web.tsx`), rendered in the `overlay` slot, that draws nothing. It reads the same data the sidebar and
+A web facet only (`web.solid.tsx`, Solid), rendered in the `overlay` slot, that draws nothing. It reads the same data the sidebar and
 the To-dos panel do: the root's `board` (open messages to the user), `ultimate.conversation-overview` (run states), the
 conversation list, and the sidebar's `ext.conversations.seen` and `ext.conversations.concluded` UI state.
 `AllowBadge` in `statusline.right` asks for notification permission on its click (`offerBadge` decides when it
 shows); the badge is set again as soon as permission changes. `status.ts` holds the priority (`tabStatus`), the title
-prefix and each status's dot colour; the favicon is project-icon's `tile`, for the folder name of the project
+prefix and each status's dot colour; `ui.solid.tsx` hands the dots to other extensions' pages. The favicon is project-icon's `tile` (from its
+`ui.solid.tsx`), for the folder name of the project
 (`system.project.root`), with that dot.
 
 The core sets the title itself (`● name` while the shown conversation is busy); a `MutationObserver` on `<head>`

@@ -6,10 +6,10 @@ name keeps this user extension from shadowing it.
 
 ## Requirements
 
-- **tab-status**, from this repository: fleet imports its `status.ts` (`../tab-status/status.ts`), so the
-  tab-status folder must sit next to it, as it does in the clone. Install both.
-- **project-icon**, from this repository: each row shows its project's tile (`../project-icon/`), with the
-  `projectIcon` overrides applied.
+- **tab-status**, from this repository: fleet's page imports its `ui.solid.tsx` (the status dots) and its server
+  `status.ts`, so the tab-status folder must sit next to it, as it does in the clone. Install both.
+- **project-icon**, from this repository: each row shows its project's tile (`../project-icon/ui.solid.tsx`), with
+  the `projectIcon` overrides applied.
 - Ultimate's built-in **inbox** and **messages** extensions: a row's waiting count opens that project's Inbox at its
   question, and `here` lists the questions through the `messages` service.
 - Optional: Ultimate's built-in tailscale extension, for links that open over the tailnet.
@@ -105,7 +105,9 @@ Every Ultimate on the machine loads this user extension, so each answers `fleet/
 tab-status's rules (the same priority as the browser tab), its busy count, and the messages waiting on the user (the
 `messages` service's `openQuestions()`). The instance the page is on answers `overview`: the projects registry
 (`host.projects()`), each running instance's `here` over loopback with its own `Origin`, and the tailnet ports from
-`~/.ultimate/tailscale.json`. The page polls `overview` every 30 s, every 3 s while a project starts or stops. `folders` lists the
+`~/.ultimate/tailscale.json`. The page reads `overview` once on the root for the counter, the
+sidebar and the surface (`useAction` with `every`): the server runs it again every 30 s, every 3 s while a project
+starts or stops. `folders` lists the
 roots on demand when Add project opens.
 
 Each project's Inbox lists only its own questions; Fleet only counts the others'. A row with a question opens
@@ -116,8 +118,8 @@ conversation even when it was last left on Fleet, which it usually was: that is 
 "new answer" uses the `ext.conversations.seen` the user's last browser left in that project, so it can lag behind the
 browser tab's own dot.
 
-It imports packages, `@/sdk`, tab-status's `status.ts`, project-icon's tile, and the sidebar's `ProjectSwatch` from the
-clone; on the server other extensions are named by string (the `messages` service, the `ultimate.conversation-overview`
+The page is Solid (`web.solid.tsx`). It imports packages, `@/sdk/solid`, the UI kit, tab-status's and project-icon's
+`ui.solid.tsx`, and the sidebar's `ProjectSwatch` from the clone; on the server other extensions are named by string (the `messages` service, the `ultimate.conversation-overview`
 document, `ext.conversations.*` UI state). If an Ultimate update renames one, `here` fails and rows show
 `not answering`.
 
