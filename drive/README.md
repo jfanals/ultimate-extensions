@@ -8,6 +8,7 @@ screen shows the same credit while a Woof voice speaks.
 
 ## Requirements
 
+- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
 - **speech**, from this repository, set up with Parakeet and the Underdog Woof download (see its README).
 - **voice**, from this repository, for local speech to text. Drive turns speech into text through voice's
   `transcribe` action, pointed at speech's local Parakeet by the `voice.transcriptionUrl` setting. With Ultimate's
@@ -92,7 +93,8 @@ Ultimate picks up each change live; no restart.
   `speech.idleMinutes` countdown applies. The browser splits replies into sentences (`speech.ts`) and fetches the next
   one while the current one plays, so speech starts after the first sentence.
 
-It imports only packages, `@/sdk` and, on the server, the clone's `lib/remote.ts`, never Ultimate's extension files:
+The screen is a Solid facet (`web.solid.tsx`). It imports only packages, `@/sdk/solid`, the kit's `Button`, the
+clone's `lib/errors.ts` and `lib/timers.ts` and, on the server, its `lib/remote.ts`, never Ultimate's extension files:
 other extensions' documents, actions and services are named by string (`board`, `ultimate.standing-agents`,
 `voice/transcribe`, `fleet/overview`, `codemode/read`, the `messages`, `subagents` and `speech` services), with the
 shapes it reads mirrored in `types.ts`. If an Ultimate update renames one of those, the
