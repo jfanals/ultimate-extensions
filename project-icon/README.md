@@ -42,16 +42,16 @@ git -C ~/ultimate-extensions pull                                               
 rm ~/.ultimate/extensions/project-icon                                            # uninstall
 ```
 
-Ultimate picks up each change live; no restart. tab-status and fleet import `icon.ts` and `use-overrides.ts`
-from this folder, so keep it in the clone while either is installed. Without its link the tiles still show, in the
+Ultimate picks up each change live; no restart. tab-status and fleet import `ui.solid.tsx` from this folder, so keep it in the clone while either is installed. Without its link the tiles still show, in the
 colours from their names, but the setting is not read.
 
 ## How it works
 
 `icon.ts` holds the pure functions: `initials(name)`, `colours(name, override?)`, `tile(name, { dot?, override? })`
 (an SVG data URL), `projectName(root)` and `overrides(value)`, which keeps the setting's valid entries. `server.ts` has
-one read-only action, `overrides`, that reads the setting; `use-overrides.ts` shares one read of it per page, refreshed
-every minute.
+one read-only action, `overrides`, that reads the setting; `ui.solid.tsx` re-exports `tile` and `projectName` for other
+extensions' Solid pages and has `useOverrides()`, one `useAction` read of the setting per page that the server runs
+again every minute.
 
 ## Tests
 
