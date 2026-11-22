@@ -464,11 +464,11 @@ export function DeckCard(props: { path: string }) {
                 class="absolute inset-y-0 left-0 rounded-full bg-brand"
                 style={{ width: `${(time() / deck().duration) * 100}%` }}
               />
-              <For each={scenes().slice(1)}>
+              <For each={scenes().slice(1)} keyed={(s) => s.start}>
                 {(s) => (
                   <span
                     class="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-muted-foreground/60"
-                    style={{ left: `${(s.start / deck().duration) * 100}%` }}
+                    style={{ left: `${(s().start / deck().duration) * 100}%` }}
                   />
                 )}
               </For>
