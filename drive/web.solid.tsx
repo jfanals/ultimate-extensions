@@ -239,16 +239,25 @@ function useNews(main: () => ConversationId, say: (utterance: Utterance) => void
   const loading = createMemo(() => conversation().loading)
   const board = useDocOf(() => ROOT, MessagesDoc)
   const titles = useConversations()
+  const toUser = createMemo(() =>
+    board()?.messages.map((message) => {
+      if (message.to !== 'user') return { id: message.id }
+      const sender =
+        message.from === main() || typeof message.from !== 'number'
+          ? undefined
+          : (titles().find((c) => c.id === message.from)?.title ?? `Branch ${message.from}`)
+      const utterance: Utterance = {
+        key: `message:${message.id}`,
+        text: messageSpeech(message, sender),
+        ...(message.reply ? { question: message.id } : {}),
+      }
+      return { id: message.id, utterance }
+    }),
+  )
   let seen: { entry: number; message: number; keys: Set<string> } | undefined
   createEffect(
-    () => ({
-      rows: entries(),
-      loaded: !loading(),
-      messages: board()?.messages,
-      summaries: titles(),
-      ultimate: main(),
-    }),
-    ({ rows, loaded, messages, summaries, ultimate }) => {
+    () => ({ rows: entries(), loaded: !loading(), messages: toUser() }),
+    ({ rows, loaded, messages }) => {
       if (!loaded || !messages) return
       // The first look only marks where "new" starts: nothing from before the screen opened is read.
       if (!seen) {
@@ -267,18 +276,8 @@ function useNews(main: () => ConversationId, say: (utterance: Utterance) => void
         if (utterance && !mark.keys.has(utterance.key)) fresh.push(utterance)
       }
       mark.entry = Math.max(mark.entry, rows.at(-1)?.id ?? 0)
-      for (const message of messages) {
-        if (message.id <= mark.message || message.to !== 'user') continue
-        const sender =
-          message.from === ultimate || typeof message.from !== 'number'
-            ? undefined
-            : (summaries.find((c) => c.id === message.from)?.title ?? `Branch ${message.from}`)
-        fresh.push({
-          key: `message:${message.id}`,
-          text: messageSpeech(message, sender),
-          ...(message.reply ? { question: message.id } : {}),
-        })
-      }
+      for (const { id, utterance } of messages)
+        if (id > mark.message && utterance) fresh.push(utterance)
       mark.message = Math.max(mark.message, messages.at(-1)?.id ?? 0)
       for (const utterance of fresh) {
         mark.keys.add(utterance.key)
@@ -307,7 +306,6 @@ function useOtherQuestions(say: (utterance: Utterance) => void) {
       ),
   )
   let seen: Set<string> | undefined
-  /** The new questions in the order they came, each read once the one before it is said. */
   let reading = Promise.resolve()
   let gone = false
   onCleanup(() => {
