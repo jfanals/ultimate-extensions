@@ -4,12 +4,14 @@ Ultimate's built-in voice input, with one addition: a `voice.transcriptionUrl` s
 OpenAI-compatible transcription server, such as [speech](../speech/)'s Parakeet, with no OpenAI API key.
 
 It replaces the built-in `voice` extension (a user extension with the same folder name wins, both facets), but copies
-none of it: `web.tsx` re-exports upstream's mic button, and `server.ts` imports upstream's server facet from the
+none of it: `web.solid.tsx` re-exports upstream's mic button, and `server.ts` imports upstream's server facet from the
 Ultimate clone and wraps two of its exports. Without the setting, every call is upstream's.
 
 ## Requirements
 
-- Ultimate (upstream, unpatched).
+- Ultimate (upstream, unpatched) at or after its Solid core (HazAT/ultimate f3e6078, November 2026). An older Ultimate
+  has no `extensions/voice/web.solid.tsx` to re-export, and its whole web UI fails to build: stay on this repository's
+  commit before the Solid move there.
 - A transcription server that takes OpenAI's `/v1/audio/transcriptions` form (`file`, answered with `{ text }`):
   [speech](../speech/) on this repository, or [whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s
   `whisper-server --convert --inference-path /v1/audio/transcriptions`.
@@ -47,7 +49,7 @@ Ultimate picks up each change live; no restart.
 
 Only `local.ts` holds behaviour of its own. What it follows from the clone's `extensions/voice/`:
 
-- `web.tsx`: re-exported as is; an upstream change applies with the next update.
+- `web.solid.tsx`: re-exported as is; an upstream change applies with the next update.
 - `server.ts`: `default`, `secrets`, `MAX_AUDIO_BYTES` and `actions` are imported; `status` and `transcribe` are
   wrapped and call upstream's when no URL is set. Recheck the wrapper when upstream renames them or changes their
   arguments (`refs.ts`).
