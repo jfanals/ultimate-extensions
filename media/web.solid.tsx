@@ -97,7 +97,7 @@ function MediaCard(props: { path: string; type: string; label: string }) {
     )
   }
 
-  const keys = usePlayerKeys((key) => {
+  const onKey = (key: string) => {
     if (state().kind === 'ready' && (key === ' ' || key === 'k')) return (play(), true)
     const element = player
     if (!element) return false
@@ -114,7 +114,7 @@ function MediaCard(props: { path: string; type: string; label: string }) {
     else if (key === 'c' && playing()?.captions) setCaptions(!captions())
     else return false
     return true
-  })
+  }
 
   const note = () => {
     const now = state()
@@ -134,7 +134,7 @@ function MediaCard(props: { path: string; type: string; label: string }) {
     <span
       class="my-1 inline-block w-full max-w-md overflow-hidden align-top rounded-md border border-border/80 bg-terminal not-prose"
       data-ui="media-card"
-      ref={keys}
+      ref={usePlayerKeys(onKey)}
       title={props.path}
     >
       <Show when={video() && playing()}>
