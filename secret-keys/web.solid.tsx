@@ -130,9 +130,9 @@ function NewSecret(props: { close: () => void }) {
     try {
       await api.action(Declare, { name: key, description: description(), url: url().trim() })
       if (secret) {
-        await api.action(SetAction, { name: key, value: secret })
+        await writingAs(source, () => api.action(SetAction, { name: key, value: secret }))
         setValue('')
-        events.emit('secrets:changed', { name: key })
+        writingAs(source, () => events.emit('secrets:changed', { name: key }))
       }
       setSaved({ name: key, value: !!secret, source })
     } catch (error) {
@@ -227,6 +227,9 @@ function NewSecret(props: { close: () => void }) {
             Cancel
           </Button>
           <Button
+            data-agent-confirm={
+              existing()?.set && value().trim() ? 'Replaces the stored secret' : undefined
+            }
             data-secret-save
             disabled={busy() || (touched() && (!!problem() || !!linkProblem()))}
             onClick={(_, details) => save(details.source)}

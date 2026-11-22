@@ -33,7 +33,6 @@ const WarmsAction = actionRef<{ conversation: number }, Warm[]>('prompt-cache', 
 const SummaryAction = actionRef<null, Summary>('prompt-cache', 'summary')
 const WarmsDoc = docRef<{ warms: Warm[] }>('cache.warms')
 
-/** How often the pings and the summary are asked again without a new ping: a settings change shows within it. */
 const REFRESH_MS = 300_000
 
 /** A quiet divider across the transcript, as `models` marks a switch: rules either side of a short line. */
