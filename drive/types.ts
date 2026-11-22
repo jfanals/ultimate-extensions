@@ -3,7 +3,7 @@
  * extension files, so these mirror `messages/refs.ts` (`Message`), `watchdog/refs.ts` (`Failure`), `subagents/refs.ts`
  * (`ultimate.standing-agents`), `voice/refs.ts` (`transcribe`) and the `messages`/`subagents` services. Browser-safe.
  */
-import type { Context } from '@earendil-works/chord'
+import type { Context } from '@earendil-works/chord/context'
 import type { ConversationId } from '@earendil-works/pi-durable'
 
 /** One question of a message to the user, as `messageSpeech` reads it. */
