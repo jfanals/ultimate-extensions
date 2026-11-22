@@ -44,8 +44,9 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 /**
- * Makes the element it is the ref of a player that takes the keys: `handle` gets each key (`' '`, `'ArrowLeft'`,
- * lowercase letters) and answers whether it acted on it.
+ * A ref that makes its element a player that takes the keys: `handle` gets each key (`' '`, `'ArrowLeft'`, lowercase
+ * letters) and answers whether it acted on it. Call it in the element's `ref` so the player goes when the element
+ * does: `ref={usePlayerKeys(handle)}`.
  */
 export function usePlayerKeys(handle: (key: string) => boolean) {
   const [element, setElement] = createSignal<HTMLElement>()

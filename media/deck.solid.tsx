@@ -240,7 +240,7 @@ export function DeckCard(props: { path: string }) {
     else element.pause()
   }
 
-  const keys = usePlayerKeys((key) => {
+  const onKey = (key: string) => {
     if (state().kind === 'ready' && (key === ' ' || key === 'k')) return (start(), true)
     const element = audio
     const now = playing()
@@ -255,7 +255,7 @@ export function DeckCard(props: { path: string }) {
     else if (key === 'c' && now.deck.captions) setCaptions(!captions())
     else return false
     return true
-  })
+  }
 
   // Follow the audio smoothly; `timeupdate` alone fires only about four times a second.
   createEffect(paused, (still) => {
@@ -345,7 +345,7 @@ export function DeckCard(props: { path: string }) {
       <span
         class="group/deck my-1 block w-full max-w-2xl overflow-hidden rounded-md border border-border/80 bg-terminal align-top not-prose"
         data-ui="deck-card"
-        ref={keys}
+        ref={usePlayerKeys(onKey)}
         title={props.path}
       >
         <span
@@ -464,11 +464,11 @@ export function DeckCard(props: { path: string }) {
                 class="absolute inset-y-0 left-0 rounded-full bg-brand"
                 style={{ width: `${(time() / deck().duration) * 100}%` }}
               />
-              <For each={scenes().slice(1)}>
+              <For each={scenes().slice(1)} keyed={(s) => s.start}>
                 {(s) => (
                   <span
                     class="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-muted-foreground/60"
-                    style={{ left: `${(s.start / deck().duration) * 100}%` }}
+                    style={{ left: `${(s().start / deck().duration) * 100}%` }}
                   />
                 )}
               </For>

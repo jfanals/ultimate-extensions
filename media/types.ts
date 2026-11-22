@@ -105,6 +105,23 @@ export function resolveLink(url: string, folder: string) {
   return normalize(`${encodeURI(folder)}/${url.replace(/[?#].*$/, '')}`)
 }
 
+/** A link's, image's or definition's destination in Markdown source: its span as written and the URL it means. */
+export type Destination = { start: number; end: number; url: string }
+
+/**
+ * `text`, a Markdown file in `folder`, with each of its `destinations` rewritten to what `resolveLink` makes of it, in
+ * angle brackets so spaces and parentheses stay part of it; labels, titles and everything else stay as written.
+ */
+export function resolveDestinations(text: string, destinations: Destination[], folder: string) {
+  return destinations
+    .toSorted((a, b) => b.start - a.start)
+    .reduce((result, { start, end, url }) => {
+      const to = resolveLink(url, folder)
+      if (to === url) return result
+      return `${result.slice(0, start)}<${to.replace(/[<>\\]/g, encodeURIComponent)}>${result.slice(end)}`
+    }, text)
+}
+
 /** An absolute path with `.`, `..` and doubled slashes resolved. */
 function normalize(path: string) {
   const parts: string[] = []

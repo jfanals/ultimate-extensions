@@ -24,6 +24,7 @@ import {
   isText,
   MAX_TEXT_BYTES,
   mediaType,
+  resolveDestinations,
   resolveLink,
   resolvePath,
   TEXT_BYTES,
@@ -270,6 +271,18 @@ test('resolves relative links in a viewed Markdown file against its folder', () 
   assert.equal(resolveLink('https://example.com/a.md', folder), 'https://example.com/a.md')
   assert.equal(resolveLink('/Users/me/plan.md', folder), '/Users/me/plan.md')
   assert.equal(resolveLink('#heading', folder), '#heading')
+})
+
+test('rewrites only the destinations of a viewed Markdown file, never its titles', () => {
+  const text = '[plan](plan.md "(plan.md)") and [site](https://example.com)'
+  const destinations = [
+    { start: 7, end: 14, url: 'plan.md' },
+    { start: 39, end: 58, url: 'https://example.com' },
+  ]
+  assert.equal(
+    resolveDestinations(text, destinations, '/Users/me/my notes'),
+    '[plan](</Users/me/my%20notes/plan.md> "(plan.md)") and [site](https://example.com)',
+  )
 })
 
 test('spots links to media files by path', () => {
