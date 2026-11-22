@@ -60,6 +60,7 @@ type in the composer or another field, and Space scrolls the page as usual when 
 ## Requirements
 
 - Ultimate (upstream, unpatched). Optional: its built-in tailscale extension, to play over the tailnet.
+- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
 
 ## How it plays
 
