@@ -85,10 +85,6 @@ const quiet = cn(button, 'text-muted-foreground hover:text-foreground')
 const POLL_MS = 30_000
 const STARTING_POLL_MS = 3000
 
-/**
- * The overview, one read on the root shared by the counter, the sidebar and the surface; the server runs it again while
- * anything on the page reads it. A failed read keeps the last overview shown with the error beside it.
- */
 const useOverview = () =>
   useAction(OverviewAction, null, {
     conversation: ROOT,
@@ -444,18 +440,18 @@ function ActionSheet(props: {
         <DialogTitle class="px-4 py-2.5 font-mono text-[11px] leading-normal font-normal text-muted-foreground">
           {props.title}
         </DialogTitle>
-        <For each={actions()}>
+        <For each={actions()} keyed={(action) => action.text}>
           {(action) => (
             <Button
-              class={cn(item, action.tone)}
+              class={cn(item, action().tone)}
               onClick={() => {
                 props.onClose()
-                action.run()
+                action().run()
               }}
               size={null}
               variant={null}
             >
-              {action.text}
+              {action().text}
             </Button>
           )}
         </For>
