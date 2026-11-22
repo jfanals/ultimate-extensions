@@ -2,6 +2,10 @@
 
 A full-size image in a conversation steps to the previous and next image with ← and →, side buttons or a swipe.
 
+## Requirements
+
+- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
+
 ## What it does
 
 Clicking any image thumbnail in a transcript (attached images, screenshots, browser and codemode images, forwarded
@@ -33,8 +37,8 @@ rm ~/.ultimate/extensions/image-viewer                                         #
 
 ## How it works
 
-A web facet only (`web.tsx`) in the `overlay` slot. A capture-phase click listener on `window` catches clicks on the
-core's thumbnail (`ToolImage`: a `cursor-zoom-in` dialog trigger) inside `[data-ui="transcript"]` before React sees
-them, so the core's single-image dialog never opens; it collects the transcript's thumbnails in DOM order and shows
+A web facet only (`web.solid.tsx`) in the `overlay` slot. A capture-phase click listener on `window` catches clicks on
+the core's thumbnail (`ToolImage`: a `cursor-zoom-in` dialog trigger) inside `[data-ui="transcript"]` before the
+thumbnail's own handler, so the core's single-image dialog never opens; it collects the transcript's thumbnails in DOM order and shows
 their `<img>` sources in one dialog. It depends on that markup: if Ultimate changes `ToolImage`, clicks fall through to
 the core's own viewer.
