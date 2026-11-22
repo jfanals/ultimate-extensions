@@ -4,8 +4,8 @@ A count on the right panel's To-dos tab of what waits on you, so you see it with
 
 ## Requirements
 
-- An Ultimate with `panelBadges` in its web SDK (a tab badge by panel id). Without it this extension loads and shows
-  nothing.
+- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026), whose web SDK has `panelBadges` (a tab
+  badge by panel id).
 
 ## What it shows
 

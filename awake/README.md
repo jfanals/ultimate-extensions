@@ -5,6 +5,7 @@ Keeps the Mac from sleeping while agents work, and lets it sleep again once they
 ## Requirements
 
 - macOS (it uses `caffeinate` and `pmset`). On other systems it loads and does nothing.
+- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
 
 ## What it does
 
@@ -36,7 +37,7 @@ Ultimate picks up each change live; no restart.
 ## How it works
 
 `awake.ts` is the hold and release rule (no timers, no processes). `server.ts` feeds it the busy count from
-`host.conversations()` every 5 s and reads `pmset -g batt` every 60 s; the `state` action serves the chip in `web.tsx`.
+`host.conversations()` every 5 s and reads `pmset -g batt` every 60 s; the `state` action serves the chip in `web.solid.tsx`.
 
 Check it: `pmset -g assertions | grep caffeinate` shows `PreventSystemSleep` while held; `pgrep -fl caffeinate`.
 
