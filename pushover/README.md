@@ -5,7 +5,7 @@ you, lands work, or @ultimate reports something to you. Nothing is sent while yo
 
 ## Requirements
 
-- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
+- Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README).
 - A Pushover account and an application token for it.
 - The secrets `PUSHOVER_TOKEN` (the application's API token) and `PUSHOVER_USER` (your user key), added in ⌘K →
   Secrets. Without them the extension sends nothing and says so in one notice.

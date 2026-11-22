@@ -5,7 +5,7 @@ Keeps the Mac from sleeping while agents work, and lets it sleep again once they
 ## Requirements
 
 - macOS (it uses `caffeinate` and `pmset`). On other systems it loads and does nothing.
-- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
+- Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README).
 
 ## What it does
 

@@ -9,8 +9,8 @@ Ultimate clone and wraps two of its exports. Without the setting, every call is 
 
 ## Requirements
 
-- Ultimate (upstream, unpatched) at or after its Solid core (HazAT/ultimate f3e6078, November 2026). An older Ultimate
-  has no `extensions/voice/web.solid.tsx` to re-export, and its whole web UI fails to build (see the top-level README).
+- Ultimate (upstream, unpatched) with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README).
+  A React Ultimate has no `extensions/voice/web.solid.tsx` to re-export, and its whole web UI fails to build.
 - A transcription server that takes OpenAI's `/v1/audio/transcriptions` form (`file`, answered with `{ text }`):
   [speech](../speech/) on this repository, or [whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s
   `whisper-server --convert --inference-path /v1/audio/transcriptions`.

@@ -4,7 +4,7 @@ A full-size image in a conversation steps to the previous and next image with â†
 
 ## Requirements
 
-- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
+- Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README).
 
 ## What it does
 

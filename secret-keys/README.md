@@ -6,8 +6,8 @@ declares yours. Name a key in ⌘K **New secret…**, with its value now or late
 
 ## Requirements
 
-- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026), with its Secrets extension (built in,
-  always on).
+- Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README), with its Secrets
+  extension (built in, always on).
 - Node 26 for `ultimate-secret`, as Ultimate requires.
 
 ## What it adds

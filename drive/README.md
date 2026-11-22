@@ -8,7 +8,7 @@ screen shows the same credit while a Woof voice speaks.
 
 ## Requirements
 
-- Ultimate at or after its Solid core (HazAT/ultimate f3e6078, November 2026).
+- Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README).
 - **speech**, from this repository, set up with Parakeet and the Underdog Woof download (see its README).
 - **voice**, from this repository, for local speech to text. Drive turns speech into text through voice's
   `transcribe` action, pointed at speech's local Parakeet by the `voice.transcriptionUrl` setting. With Ultimate's

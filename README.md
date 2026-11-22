@@ -8,9 +8,10 @@ name and imports it from the clone (its README says which files it follows).
 
 ## Requirements
 
-Ultimate at or after its Solid core (HazAT/ultimate `f3e6078`, November 2026). Every browser facet is Solid
-(`web.solid.tsx`, `@/sdk/solid`), the way Ultimate's own extensions are written. On an older, React Ultimate, check out
-this repository's last React commit, `091f41e`.
+Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (November 2026), the revision these extensions
+are tested on. Every browser facet is Solid (`web.solid.tsx`, `@/sdk/solid`), the way Ultimate's own extensions are
+written, and some use Solid SDK parts added after the core moved to Solid (`f3e6078`), such as `usePageVisible` and
+`StatusButton`. On an older, React Ultimate, check out this repository's last React commit, `091f41e`.
 
 | Extension                         | What it does                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------- |
