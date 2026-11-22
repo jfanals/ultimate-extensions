@@ -143,7 +143,11 @@ export function resolveDestinations(text: string, destinations: Destination[], f
     .reduce((result, { start, end, url }) => {
       const to = resolveLink(url, folder)
       if (to === url) return result
-      return `${result.slice(0, start)}<${to.replace(/[\\<>&|]/g, '\\$&')}>${result.slice(end)}`
+      const written = to
+        .replace(/[\\<>&|]/g, '\\$&')
+        .replace(/\n/g, '&#10;')
+        .replace(/\r/g, '&#13;')
+      return `${result.slice(0, start)}<${written}>${result.slice(end)}`
     }, text)
 }
 

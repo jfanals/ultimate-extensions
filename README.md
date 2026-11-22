@@ -77,11 +77,10 @@ Each extension has `node --test` tests (Node 26, as Ultimate requires):
 
 ```sh
 cd ~/ultimate-extensions
-node --test cliproxy/picker.test.ts awake/awake.test.ts project-icon/icon.test.ts tab-status/status.test.ts fleet/fleet.test.ts speech/speech.test.ts voice/voice.test.ts drive/drive.test.ts media/media.test.ts todos-badge/count.test.ts secret-keys/keys.test.ts pushover/rules.test.ts dream-defaults/defaults.test.ts
-ULTIMATE_ROOT=/path/to/ultimate node --test prompt-cache/cache.test.ts
+ULTIMATE_ROOT=/path/to/ultimate node --test */*.test.ts
 ```
 
-prompt-cache's test loads Pi from your Ultimate clone's `node_modules`.
+prompt-cache's test loads Pi, and media's test the Markdown parser, from your Ultimate clone's `node_modules`.
 
 ## Licence
 

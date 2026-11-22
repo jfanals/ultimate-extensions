@@ -294,7 +294,7 @@ test('a viewed Markdown file parses again to its resolved destinations, titles a
   const text = [
     '[plan](plan.md "(plan.md)") and [site](https://example.com)',
     '',
-    '[report](report&amp;copy;.md)',
+    '[report](report&amp;copy;.md) [lines](my&#10;re&#13;port.md)',
     '',
     '| file | note |',
     '| --- | --- |',
@@ -309,6 +309,7 @@ test('a viewed Markdown file parses again to its resolved destinations, titles a
       '/Users/me/my%20notes/plan.md',
       'https://example.com',
       '/Users/me/my%20notes/report&copy;.md',
+      '/Users/me/my%20notes/my\nre\rport.md',
       '/Users/me/my%20notes/a|b.md',
     ],
   )
