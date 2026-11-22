@@ -459,6 +459,7 @@ function DriveScreen(props: { main: ConversationId }) {
   // Both engines take seconds to load cold: start them as the screen opens, and keep them warm while it is shown.
   const warmed = useAction(WarmAction, null, {
     every: () => (visible() ? KEEP_WARM_MS : undefined),
+    onError: keepLast,
   })
   const voice = () => warmed.data()?.voice
   const shownError = () => {
