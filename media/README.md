@@ -100,11 +100,14 @@ rm ~/.ultimate/extensions/media                                                 
 
 ## Tests
 
+The test loads the Markdown parser from your Ultimate clone, so point `ULTIMATE_ROOT` at it:
+
 ```sh
-node --test media/media.test.ts
+ULTIMATE_ROOT=/path/to/ultimate node --test media/media.test.ts
 ```
 
 They cover what may be read (project folders only, symlinks resolved, media bytes only), which files count as text and
-the size caps of the text viewer, subtitles beside a video, how links are spotted, and which inline code spans count
+the size caps of the text viewer, subtitles beside a video, how links are spotted, how a viewed Markdown file's links
+resolve and parse again to the same targets, and which inline code spans count
 as paths, how they resolve (relative, `~/`, absolute) and that only text files in project folders open. The cards, chips and
 the inline code links themselves were checked on the running host.

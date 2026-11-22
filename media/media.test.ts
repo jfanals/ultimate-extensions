@@ -1,12 +1,14 @@
 /**
- * What `media` serves, outside the clone's suites: `node --test ~/.ultimate/extensions/media/media.test.ts`. The player
- * card is checked on the running host.
+ * What `media` serves, outside the clone's suites:
+ * `ULTIMATE_ROOT=/path/to/ultimate node --test ~/.ultimate/extensions/media/media.test.ts`. The player card is checked
+ * on the running host.
  */
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import {
   CHUNK_BYTES,
   existingText,
@@ -24,12 +26,26 @@ import {
   isText,
   MAX_TEXT_BYTES,
   mediaType,
+  destinationsOf,
+  remarkDestinations,
   resolveDestinations,
   resolveLink,
   resolvePath,
   TEXT_BYTES,
   TEXT_LINES,
 } from './types.ts'
+
+// The Markdown parser comes from the Ultimate clone's node_modules, as it does when the viewer runs.
+const root = process.env.ULTIMATE_ROOT
+if (!root) throw new Error('Set ULTIMATE_ROOT to your Ultimate clone (it provides the Markdown parser)')
+const fromClone = (name: string) =>
+  import(pathToFileURL(join(root, 'node_modules', name, 'index.js')).href)
+const [{ unified }, { default: remarkParse }, { default: remarkGfm }] = await Promise.all([
+  fromClone('unified'),
+  fromClone('remark-parse'),
+  fromClone('remark-gfm'),
+])
+const markdown = unified().use(remarkParse).use(remarkGfm).use(remarkDestinations)
 
 const wav = (bytes: number) => {
   const data = Buffer.alloc(bytes)
@@ -273,16 +289,32 @@ test('resolves relative links in a viewed Markdown file against its folder', () 
   assert.equal(resolveLink('#heading', folder), '#heading')
 })
 
-test('rewrites only the destinations of a viewed Markdown file, never its titles', () => {
-  const text = '[plan](plan.md "(plan.md)") and [site](https://example.com)'
-  const destinations = [
-    { start: 7, end: 14, url: 'plan.md' },
-    { start: 39, end: 58, url: 'https://example.com' },
-  ]
-  assert.equal(
-    resolveDestinations(text, destinations, '/Users/me/my notes'),
-    '[plan](</Users/me/my%20notes/plan.md> "(plan.md)") and [site](https://example.com)',
+test('a viewed Markdown file parses again to its resolved destinations, titles and tables kept', () => {
+  const folder = '/Users/me/my notes'
+  const text = [
+    '[plan](plan.md "(plan.md)") and [site](https://example.com)',
+    '',
+    '[report](report&amp;copy;.md)',
+    '',
+    '| file | note |',
+    '| --- | --- |',
+    '| [t](a\\|b.md) | x |',
+  ].join('\n')
+  const first = destinationsOf(markdown.parse(text))
+  const rewritten = resolveDestinations(text, first, folder)
+  const tree = markdown.parse(rewritten)
+  assert.deepEqual(
+    destinationsOf(tree).map((destination) => destination.url),
+    [
+      '/Users/me/my%20notes/plan.md',
+      'https://example.com',
+      '/Users/me/my%20notes/report&copy;.md',
+      '/Users/me/my%20notes/a|b.md',
+    ],
   )
+  assert.match(rewritten, /"\(plan\.md\)"/)
+  const row = tree.children.at(-1).children.at(-1)
+  assert.equal(row.children.length, 2)
 })
 
 test('spots links to media files by path', () => {

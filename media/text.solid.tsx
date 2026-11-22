@@ -29,8 +29,7 @@ import {
   useSystem,
 } from '@/sdk/solid'
 import { InfoAction } from './load.ts'
-import { resolveDestinations } from './types.ts'
-import type { Destination } from './types.ts'
+import { destinationsOf, remarkDestinations, resolveDestinations } from './types.ts'
 
 type Text = { size: number; lines?: number; text: string; truncated: boolean }
 /**
@@ -314,39 +313,7 @@ function Contents(props: { body?: Body; path: string; loadAll: () => void }) {
   )
 }
 
-type Mdast = {
-  url?: string
-  data?: { destination?: [number, number] }
-  children?: Mdast[]
-}
-type CompileContext = { stack: Mdast[] }
-type Token = { start: { offset: number }; end: { offset: number } }
-
-/** Marks each link, image and definition node with where its destination is written in the source. */
-function remarkDestinations(this: ReturnType<typeof unified>) {
-  const mark = function (this: CompileContext, token: Token) {
-    const node = this.stack.at(-1)
-    if (node) node.data = { ...node.data, destination: [token.start.offset, token.end.offset] }
-  }
-  const data = this.data() as { fromMarkdownExtensions?: unknown[] }
-  ;(data.fromMarkdownExtensions ??= []).push({
-    exit: { resourceDestination: mark, definitionDestination: mark },
-  })
-}
-
 const markdownTree = unified().use(remarkParse).use(remarkGfm).use(remarkDestinations)
-
-/** The destinations of `text`'s links, images and definitions, as its parsed tree has them. */
-function destinationsOf(text: string) {
-  const found: Destination[] = []
-  const walk = (node: Mdast) => {
-    const at = node.data?.destination
-    if (at && node.url !== undefined) found.push({ start: at[0], end: at[1], url: node.url })
-    node.children?.forEach(walk)
-  }
-  walk(markdownTree.parse(text) as Mdast)
-  return found
-}
 
 /**
  * A Markdown file rendered as the transcript renders messages, except that relative links resolve against the file's
@@ -356,7 +323,7 @@ function MarkdownFile(props: { path: string; text: string }) {
   const text = createMemo(() =>
     resolveDestinations(
       props.text,
-      destinationsOf(props.text),
+      destinationsOf(markdownTree.parse(props.text)),
       props.path.slice(0, props.path.lastIndexOf('/')),
     ),
   )
