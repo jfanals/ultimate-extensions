@@ -8,8 +8,8 @@ extension draws no extra line for them; it adds the warms and the dollar totals.
 ## Requirements
 
 - Ultimate with its Solid core, at or after HazAT/ultimate `08c0b24e` (see the top-level README). Its `context` draws
-  the cache-rebuilt line itself (the `context.cache-rebuilt` point is gone), so the line no longer shows the rebuild's cost; the chip
-  still counts it.
+  the cache-rebuilt line itself (the `context.cache-rebuilt` point is gone), so the line no longer shows the rebuild's
+  cost; the chip still counts it.
 - Pi's `collectCacheMisses` comes from the Ultimate clone's `node_modules`.
 
 ## In the transcript
