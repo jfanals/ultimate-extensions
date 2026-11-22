@@ -249,10 +249,11 @@ function FileLink(props: { target: Target; href: string; children: JSX.Element }
 const MediaLink: LinkRenderer = (props) => {
   const target = createMemo(
     (): Target | undefined => {
-      const type = mediaType(props.href) ?? ''
-      const kind = isDeck(props.href) ? 'deck' : isText(props.href) ? 'text' : type ? 'media' : undefined
-      const path = kind && decoded(props.href)
-      return kind && path !== undefined ? { kind, path, type } : undefined
+      const path = decoded(props.href)
+      if (path === undefined) return undefined
+      const type = mediaType(path) ?? ''
+      const kind = isDeck(path) ? 'deck' : isText(path) ? 'text' : type ? 'media' : undefined
+      return kind && { kind, path, type }
     },
     { equals: (a, b) => a?.path === b?.path },
   )
