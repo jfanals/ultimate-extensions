@@ -1,4 +1,4 @@
-import { actionRef, api } from '@/sdk'
+import { actionRef, api } from '@/sdk/solid'
 
 /**
  * `{ path }` → `{ type, size }` of a media file in a project folder, with `lines` for a text file, or null when it does

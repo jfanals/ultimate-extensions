@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createEffect, createSignal } from 'solid-js'
 
 /**
  * YouTube's keys for the transcript's players. One player takes them: the full-screen one, else the one last played
@@ -48,13 +48,10 @@ function onKeyDown(event: KeyboardEvent) {
  * lowercase letters) and answers whether it acted on it.
  */
 export function usePlayerKeys(handle: (key: string) => boolean) {
-  const latest = useRef(handle)
-  useEffect(() => {
-    latest.current = handle
-  })
-  return useCallback((root: HTMLElement | null) => {
+  const [element, setElement] = createSignal<HTMLElement>()
+  createEffect(element, (root) => {
     if (!root) return undefined
-    const player: Player = { root, key: (key) => latest.current(key) }
+    const player: Player = { root, key: handle }
     if (!players.size) window.addEventListener('keydown', onKeyDown)
     players.add(player)
     observer ??= new IntersectionObserver(
@@ -78,14 +75,15 @@ export function usePlayerKeys(handle: (key: string) => boolean) {
       if (active === player) active = undefined
       if (!players.size) window.removeEventListener('keydown', onKeyDown)
     }
-  }, [])
+  })
+  return setElement
 }
 
 const CAPTIONS = 'media.captions'
 
 /** Whether captions show, remembered for every player; on until the user turns them off. */
 export function useCaptions() {
-  const [on, setOn] = useState(() => localStorage.getItem(CAPTIONS) !== 'off')
+  const [on, setOn] = createSignal(localStorage.getItem(CAPTIONS) !== 'off')
   const set = (next: boolean) => {
     localStorage.setItem(CAPTIONS, next ? 'on' : 'off')
     setOn(next)
