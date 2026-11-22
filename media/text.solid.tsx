@@ -29,7 +29,8 @@ import {
   useSystem,
 } from '@/sdk/solid'
 import { InfoAction } from './load.ts'
-import { resolveLink } from './types.ts'
+import { resolveDestinations } from './types.ts'
+import type { Destination } from './types.ts'
 
 type Text = { size: number; lines?: number; text: string; truncated: boolean }
 /**
@@ -313,45 +314,38 @@ function Contents(props: { body?: Body; path: string; loadAll: () => void }) {
   )
 }
 
-const markdownTree = unified().use(remarkParse).use(remarkGfm)
-
 type Mdast = {
-  type: string
   url?: string
-  position?: { start: { offset?: number }; end: { offset?: number } }
+  data?: { destination?: [number, number] }
   children?: Mdast[]
 }
+type CompileContext = { stack: Mdast[] }
+type Token = { start: { offset: number }; end: { offset: number } }
 
-/**
- * `text`, a Markdown file in `folder`, with each relative link, image and link definition pointing at the file beside
- * it, as an absolute path: the transcript's Markdown hardens links for messages, which would turn `../README.md` into
- * `/README.md` and block `docs/plan.md`.
- */
-function resolveLinks(text: string, folder: string) {
-  const edits: { at: number; from: string; to: string }[] = []
-  const walk = (node: Mdast) => {
-    if (node.url !== undefined && node.position?.start.offset !== undefined) {
-      const to = resolveLink(node.url, folder)
-      const start = node.position.start.offset
-      const at = destination(text.slice(start, node.position.end.offset), node.type, node.url)
-      if (to !== node.url && at >= 0) edits.push({ at: start + at, from: node.url, to })
-    }
-    node.children?.forEach(walk)
+/** Marks each link, image and definition node with where its destination is written in the source. */
+function remarkDestinations(this: ReturnType<typeof unified>) {
+  const mark = function (this: CompileContext, token: Token) {
+    const node = this.stack.at(-1)
+    if (node) node.data = { ...node.data, destination: [token.start.offset, token.end.offset] }
   }
-  walk(markdownTree.parse(text))
-  return edits.reduceRight(
-    (result, edit) => result.slice(0, edit.at) + edit.to + result.slice(edit.at + edit.from.length),
-    text,
-  )
+  const data = this.data() as { fromMarkdownExtensions?: unknown[] }
+  ;(data.fromMarkdownExtensions ??= []).push({
+    exit: { resourceDestination: mark, definitionDestination: mark },
+  })
 }
 
-/** Where the destination `url` starts in `source`, a link's, image's or definition's Markdown, or -1 if written otherwise. */
-function destination(source: string, type: string, url: string) {
-  if (type === 'definition') return source.indexOf(url, source.indexOf(']:'))
-  const bare = source.lastIndexOf(`(${url}`)
-  if (bare >= 0) return bare + 1
-  const angled = source.lastIndexOf(`(<${url}`)
-  return angled >= 0 ? angled + 2 : -1
+const markdownTree = unified().use(remarkParse).use(remarkGfm).use(remarkDestinations)
+
+/** The destinations of `text`'s links, images and definitions, as its parsed tree has them. */
+function destinationsOf(text: string) {
+  const found: Destination[] = []
+  const walk = (node: Mdast) => {
+    const at = node.data?.destination
+    if (at && node.url !== undefined) found.push({ start: at[0], end: at[1], url: node.url })
+    node.children?.forEach(walk)
+  }
+  walk(markdownTree.parse(text) as Mdast)
+  return found
 }
 
 /**
@@ -360,7 +354,11 @@ function destination(source: string, type: string, url: string) {
  */
 function MarkdownFile(props: { path: string; text: string }) {
   const text = createMemo(() =>
-    resolveLinks(props.text, props.path.slice(0, props.path.lastIndexOf('/'))),
+    resolveDestinations(
+      props.text,
+      destinationsOf(props.text),
+      props.path.slice(0, props.path.lastIndexOf('/')),
+    ),
   )
   return (
     <span class="mx-auto block max-w-3xl px-3.5 py-2.5">
