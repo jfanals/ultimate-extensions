@@ -1,11 +1,21 @@
-/** Ultimate's classify service, answered by a System One model through Pi's runtime on OpenRouter, without a TypeSafe key. */
+/** Ultimate's classify service, answered by a decision model through Pi's runtime on OpenRouter, without a TypeSafe key. */
 import type { ClassifierContext, ClassifierModel, ClassifierResult } from '@earendil-works/pi-ai'
 import type { ClassifyAnswer, ClassifyService } from '@/../../extensions/classify/api.ts'
 
 export const provider = 'openrouter'
-export const jev = 'typesafe/jev-1.14'
-/** The branch report judge's model: right on 36 of 38 labelled branch answers, against Jev's 32 (README). */
-export const judgeModel = 'microsoft/microsoft-decision-1.1'
+/** The decision models without a setting: the judge's was right on 36 of 38 labelled branch answers, Jev on 32 (README). */
+export const defaults = { model: 'typesafe/jev-1.14', judge: 'microsoft/microsoft-decision-1.1' }
+
+/** The models from the `classifyOpenRouter` setting, each one unset taking its default. */
+export function modelsOf(setting: unknown): typeof defaults {
+  if (setting === undefined) return defaults
+  if (!setting || typeof setting !== 'object' || Array.isArray(setting))
+    throw new Error('classifyOpenRouter must be an object')
+  const { model = defaults.model, judge = defaults.judge } = setting as Record<string, unknown>
+  if (typeof model !== 'string' || typeof judge !== 'string')
+    throw new Error('classifyOpenRouter.model and .judge must be OpenRouter model ids')
+  return { model, judge }
+}
 
 /** The part of Pi's model runtime the adapter uses. */
 export type Runtime = {

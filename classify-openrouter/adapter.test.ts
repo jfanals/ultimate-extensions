@@ -1,8 +1,23 @@
-/** Classify answered through Pi's runtime: `node --test jev-openrouter/adapter.test.ts`. */
+/** Classify answered through Pi's runtime: `node --test classify-openrouter/adapter.test.ts`. */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { jev, openRouterClassify, provider } from './adapter.ts'
+import { defaults, modelsOf, openRouterClassify, provider } from './adapter.ts'
 import type { Runtime } from './adapter.ts'
+
+const jev = defaults.model
+
+test('the setting picks each model; unset ones keep Jev for classify and Microsoft for the judge', () => {
+  assert.deepEqual(modelsOf(undefined), {
+    model: 'typesafe/jev-1.14',
+    judge: 'microsoft/microsoft-decision-1.1',
+  })
+  assert.deepEqual(modelsOf({ judge: 'typesafe/jev-1.14' }), {
+    model: 'typesafe/jev-1.14',
+    judge: 'typesafe/jev-1.14',
+  })
+  assert.throws(() => modelsOf({ model: 7 }), /OpenRouter model ids/)
+  assert.throws(() => modelsOf('typesafe/jev-1.14'), /must be an object/)
+})
 
 const model = { id: jev, provider, type: 'classifier' } as never
 const questions = {
