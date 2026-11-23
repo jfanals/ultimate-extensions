@@ -30,6 +30,7 @@ written, and some use Solid SDK parts added after the core moved to Solid (`f3e6
 | [secret-keys](secret-keys/)       | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
 | [pushover](pushover/)             | Pushover notifications for questions, landings and @ultimate's reports while you are away.         |
 | [dream-defaults](dream-defaults/) | Your thresholds for the two built-in dream automations, in every project, new ones included.       |
+| [jev-openrouter](jev-openrouter/) | TypeSafe's Jev through your OpenRouter key: classify, the branch report judge and recall.          |
 
 ## Install
 
@@ -68,6 +69,7 @@ No restart: Ultimate reloads an extension when its files change.
   tailscale extension.
 - **cliproxy** uses Ultimate's Secrets and Automations extensions and a local CLIProxyAPI service (no extra package).
 - **dream-defaults** uses Ultimate's dream and automations extensions, both built in.
+- **jev-openrouter** needs an OpenRouter key in Pi and replaces Ultimate's `classify`: keep that one off.
 
 The others stand alone. Each README lists its requirements, settings and tests.
 
