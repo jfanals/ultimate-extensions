@@ -34,8 +34,11 @@ What these calls judge leaves the machine, to OpenRouter and from there to the m
 - to TypeSafe: @ultimate's incoming messages and every memory's one-line summary (recall), and whatever state a
   script passes to `models.classify`.
 
-To keep OpenRouter and its providers from logging or retaining it, turn on no logging or zero data retention in
-your OpenRouter account, under Settings → Privacy.
+Every call this extension makes (the judge, the `classify` service and recall) asks OpenRouter for zero data
+retention (`provider: { zdr: true }`): only an endpoint that retains nothing may serve it, and without one the call
+fails (a branch answer then reports). Scripts calling `models.classify` go to Pi directly, not through this
+extension, so for those only your account setting applies: turn on no logging or zero data retention in your
+OpenRouter account, under Settings → Privacy.
 
 ## Models
 

@@ -26,7 +26,7 @@ const parsed = {
   mood: { type: 'score', score: 0.98, confidence: 0.97 },
 }
 
-/** A runtime that, like Pi's, posts through the fetch it is given and then returns `result`. */
+/** A runtime that, like Pi's, posts the payload `onPayload` makes through the fetch it is given, then returns `result`. */
 function runtime(result: object, found = true) {
   const calls: unknown[][] = []
   const fake: Runtime = {
@@ -36,7 +36,12 @@ function runtime(result: object, found = true) {
     },
     classify: async (...args) => {
       calls.push(['classify', args[0], args[1]])
-      await args[2].fetch('https://openrouter.test/systemone', { method: 'POST' })
+      const body = args[2].onPayload({ model: jev, ...args[1] })
+      calls.push(['post', body])
+      await args[2].fetch('https://openrouter.test/systemone', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
       return { model: jev, answers: parsed, stopReason: 'stop', ...result } as never
     },
   }
@@ -45,13 +50,14 @@ function runtime(result: object, found = true) {
 const respond = (status: number) => async () => Response.json({ answers: wire }, { status })
 const signal = new AbortController().signal
 
-test('asks Jev on OpenRouter and returns classify’s own answers: noul, and score with probabilities and legend', async () => {
+test('asks Jev on OpenRouter, zero data retention only, and returns classify’s own answers: noul, and score with probabilities and legend', async () => {
   const { fake, calls } = runtime({ usage: { input: 312 } })
   const result = await openRouterClassify(fake, jev, respond(200)).ask(request, signal)
   assert.deepEqual(result, { model: jev, answers: wire, usage: { inputTokens: 312 } })
   assert.deepEqual(calls, [
     ['model', 'classifier', 'openrouter', 'typesafe/jev-1.14'],
     ['classify', model, { state: { message: 'Landed.' }, questions }],
+    ['post', { model: jev, state: { message: 'Landed.' }, questions, provider: { zdr: true } }],
   ])
 })
 

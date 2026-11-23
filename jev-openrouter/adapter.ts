@@ -13,7 +13,11 @@ export type Runtime = {
   classify(
     model: ClassifierModel,
     context: ClassifierContext,
-    options: { signal: AbortSignal; fetch: typeof fetch },
+    options: {
+      signal: AbortSignal
+      fetch: typeof fetch
+      onPayload: (payload: unknown) => unknown
+    },
   ): Promise<ClassifierResult>
 }
 
@@ -31,6 +35,8 @@ export function openRouterClassify(
       let wire: Record<string, ClassifyAnswer> | undefined
       const result = await runtime.classify(model, { state, questions } as ClassifierContext, {
         signal,
+        // Only providers that retain nothing may serve it; without one the call fails.
+        onPayload: (payload) => ({ ...(payload as object), provider: { zdr: true } }),
         async fetch(input, init) {
           const response = await request(input, init)
           if (response.ok)
