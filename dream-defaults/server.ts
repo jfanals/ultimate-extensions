@@ -18,8 +18,6 @@ type Done = { done: string[] }
 export default function dreamDefaults(host: ExtensionHost) {
   // One check at a time, across facet reloads: two at once could both update.
   const queue = host.resource('dream-defaults.queue', () => ({ last: Promise.resolve() }))
-  /** The current opening's watcher; a check from an earlier opening never touches it. */
-  let opening: { stop?: () => void } | undefined
 
   /** Apply the defaults to the built-ins dream has made; true once nothing is left to wait for. */
   async function check(): Promise<boolean> {
@@ -60,9 +58,10 @@ export default function dreamDefaults(host: ExtensionHost) {
     return !waiting
   }
 
+  /** `mine.stop` is gone once that opening ended or finished: a check queued before then does nothing. */
   const run = (mine: { stop?: () => void }) => {
     queue.last = queue.last.then(async () => {
-      if (opening !== mine) return
+      if (!mine.stop) return
       try {
         if (await check()) mine.stop?.()
       } catch (error) {
@@ -70,16 +69,9 @@ export default function dreamDefaults(host: ExtensionHost) {
       }
     })
   }
-  const close = async () => {
-    opening?.stop?.()
-    opening = undefined
-    await queue.last
-  }
 
-  host.onOpen(async () => {
-    await close()
+  host.onOpen(async (opened) => {
     const mine: { stop?: () => void } = {}
-    opening = mine
     // Dream makes its built-ins after the opening, or once @ultimate starts on a fresh project, and records each id in
     // its own document: a commit to one is the moment to look. Pi's records, not a domain event.
     const detach = onCommit(host.harness(), (publication) => {
@@ -94,9 +86,11 @@ export default function dreamDefaults(host: ExtensionHost) {
       detach()
       mine.stop = undefined
     }
+    opened.defer(async () => {
+      mine.stop?.()
+      await queue.last
+    })
     run(mine)
   })
-  host.onRelease(close)
-  host.onClose(close)
   return defineExtension({ name: 'dream-defaults' })
 }

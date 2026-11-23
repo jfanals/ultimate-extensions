@@ -149,22 +149,20 @@ export default function pushover(host: ExtensionHost) {
     { from: 'now' },
   )
 
-  host.onOpen(async () => {
-    // Each open, not only at load: a failed core swap reopens this process's harness after onRelease let go.
+  host.onOpen(async (opened) => {
+    // Each open, not only at load: a failed core swap reopens this process's harness after its release let go.
     questions.send = send
+    opened.defer(async () => {
+      // A replacement facet may have taken over already.
+      if (questions.send === send) questions.send = undefined
+      while (sending.size) await Promise.all(sending)
+    })
     // Once per process, not on each reload of the facet.
     const told = host.resource('pushover.told', () => ({ missing: false }))
     if (told.missing || (await keys(host))) return
     told.missing = true
     host.notice(MISSING)
   })
-  const close = async () => {
-    // A replacement facet may have taken over already.
-    if (questions.send === send) questions.send = undefined
-    while (sending.size) await Promise.all(sending)
-  }
-  host.onRelease(close)
-  host.onClose(close)
   return defineExtension({ name: 'pushover' })
 }
 
