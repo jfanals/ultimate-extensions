@@ -30,7 +30,7 @@ written, and some use Solid SDK parts added after the core moved to Solid (`f3e6
 | [secret-keys](secret-keys/)       | Add a secret by name, value now or later; agents ask for keys; `ultimate-secret` reads one back.   |
 | [pushover](pushover/)             | Pushover notifications for questions, landings and @ultimate's reports while you are away.         |
 | [dream-defaults](dream-defaults/) | Your thresholds for the two built-in dream automations, in every project, new ones included.       |
-| [jev-openrouter](jev-openrouter/) | TypeSafe's Jev through your OpenRouter key: classify, the branch report judge and recall.          |
+| [jev-openrouter](jev-openrouter/) | Classify, recall and the branch report judge through your OpenRouter key, no TypeSafe key.         |
 
 ## Install
 

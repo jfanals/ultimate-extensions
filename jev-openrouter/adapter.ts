@@ -1,9 +1,11 @@
-/** Ultimate's classify service, answered by Jev through Pi's model runtime on OpenRouter instead of a TypeSafe key. */
+/** Ultimate's classify service, answered by a System One model through Pi's runtime on OpenRouter, without a TypeSafe key. */
 import type { ClassifierContext, ClassifierModel, ClassifierResult } from '@earendil-works/pi-ai'
 import type { ClassifyAnswer, ClassifyService } from '@/../../extensions/classify/api.ts'
 
 export const provider = 'openrouter'
-export const modelId = 'typesafe/jev-1.14'
+export const jev = 'typesafe/jev-1.14'
+/** The branch report judge's model: right on 36 of 38 labelled branch answers, against Jev's 32 (README). */
+export const judgeModel = 'microsoft/microsoft-decision-1.1'
 
 /** The part of Pi's model runtime the adapter uses. */
 export type Runtime = {
@@ -15,7 +17,11 @@ export type Runtime = {
   ): Promise<ClassifierResult>
 }
 
-export function openRouterClassify(runtime: Runtime, request = fetch): ClassifyService {
+export function openRouterClassify(
+  runtime: Runtime,
+  modelId: string,
+  request = fetch,
+): ClassifyService {
   return {
     async ask({ state, questions }, signal) {
       const model = runtime.getModelOfType('classifier', provider, modelId)
