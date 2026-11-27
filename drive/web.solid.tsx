@@ -33,7 +33,7 @@ import {
   UserView,
 } from '@/sdk/solid'
 import type { SolidEntryProps } from '@/sdk/solid'
-import { meansNone } from '@/../../lib/errors.ts'
+import { meansNone } from '@/../../lib/errors.shared.ts'
 import type { Board } from './types.ts'
 import { entrySpeech, messageSpeech, plain, sentences } from './speech.ts'
 import type { Utterance } from './speech.ts'

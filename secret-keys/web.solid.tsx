@@ -32,7 +32,7 @@ import {
   writingAs,
 } from '@/sdk/solid'
 import { ListAction, SetAction } from '@/../../extensions/secrets/refs.ts'
-import { deadline } from '@/../../lib/timers.ts'
+import { deadline } from '@/../../lib/timers.shared.ts'
 import { nameProblem, urlProblem } from './keys.ts'
 import type { Key } from './keys.ts'
 

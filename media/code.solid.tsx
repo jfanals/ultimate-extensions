@@ -4,7 +4,7 @@ import { createEffect, createMemo, createSignal, Show } from 'solid-js'
 import type { Accessor } from 'solid-js'
 import { Button } from '@/components/ui/button.solid.tsx'
 import { actionRef, api, useAgent, useSystem } from '@/sdk/solid'
-import { batch } from '@/../../lib/timers.ts'
+import { batch } from '@/../../lib/timers.shared.ts'
 import { TextDialog } from './text.solid.tsx'
 import { resolvePath } from './types.ts'
 
